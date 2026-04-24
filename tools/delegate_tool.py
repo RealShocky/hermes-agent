@@ -19,6 +19,8 @@ never the child's intermediate tool calls or reasoning.
 import enum
 import json
 import logging
+import queue
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 import os
@@ -244,6 +246,64 @@ def _looks_like_error_output(content: str) -> bool:
         or first.startswith("traceback ")
         or first.startswith("exception:")
     )
+
+
+def _recover_summary_from_session_log(child) -> tuple[Optional[str], int]:
+    """Best-effort recovery when a child executed tools but stalled before a final reply.
+
+    Some OpenAI-compatible endpoints can complete the tool-call round, persist the
+    tool result into the session log, then hang on the follow-up assistant turn.
+    Instead of throwing away real completed work as a hard timeout, salvage the
+    last useful artifact from the child's session log.
+    """
+    log_path = getattr(child, "session_log_file", None)
+    if not log_path:
+        return None, 0
+
+    try:
+        session_path = Path(log_path)
+        if not session_path.exists():
+            return None, 0
+        payload = json.loads(session_path.read_text(encoding="utf-8"))
+        messages = payload.get("messages") or []
+        recovered_api_calls = 0
+        for msg in messages:
+            if isinstance(msg, dict) and msg.get("role") == "assistant":
+                recovered_api_calls += 1
+
+        # Prefer the newest assistant text if one exists.
+        for msg in reversed(messages):
+            if not isinstance(msg, dict):
+                continue
+            if msg.get("role") == "assistant":
+                content = str(msg.get("content") or "").strip()
+                if content:
+                    return content, recovered_api_calls
+
+        # Otherwise salvage the newest successful tool output.
+        for msg in reversed(messages):
+            if not isinstance(msg, dict) or msg.get("role") != "tool":
+                continue
+            content = msg.get("content")
+            if not isinstance(content, str) or not content.strip():
+                continue
+            try:
+                parsed = json.loads(content)
+            except Exception:
+                parsed = None
+            if isinstance(parsed, dict):
+                output = str(parsed.get("output") or "").strip()
+                error = str(parsed.get("error") or "").strip()
+                exit_code = parsed.get("exit_code")
+                if output and (exit_code in (0, None)):
+                    return output, max(recovered_api_calls, 1)
+                if error:
+                    return f"Tool reported an error: {error}", max(recovered_api_calls, 1)
+            return content.strip(), max(recovered_api_calls, 1)
+    except Exception as exc:
+        logger.debug("Could not recover timed-out subagent summary: %s", exc)
+
+    return None, 0
 
 
 def _normalize_role(r: Optional[str]) -> str:
@@ -1167,14 +1227,33 @@ def _run_single_child(
         # Run child with a hard timeout to prevent indefinite blocking
         # when the child's API call or tool-level HTTP request hangs.
         child_timeout = _get_child_timeout()
-        _timeout_executor = ThreadPoolExecutor(max_workers=1)
-        _child_future = _timeout_executor.submit(
-            child.run_conversation,
-            user_message=goal,
-            task_id=child_task_id,
+        _result_queue: "queue.Queue[tuple[str, Any]]" = queue.Queue(maxsize=1)
+
+        def _run_child_conversation() -> None:
+            try:
+                _result_queue.put(
+                    (
+                        "result",
+                        child.run_conversation(
+                            user_message=goal,
+                            task_id=child_task_id,
+                        ),
+                    )
+                )
+            except Exception as exc:
+                _result_queue.put(("error", exc))
+
+        _child_thread = threading.Thread(
+            target=_run_child_conversation,
+            name=f"delegate-child-{task_index}",
+            daemon=True,
         )
+        _child_thread.start()
         try:
-            result = _child_future.result(timeout=child_timeout)
+            _status, _payload = _result_queue.get(timeout=child_timeout)
+            if _status == "error":
+                raise _payload
+            result = _payload
         except Exception as _timeout_exc:
             # Signal the child to stop so its thread can exit cleanly.
             try:
@@ -1210,6 +1289,19 @@ def _run_single_child(
                 except Exception:
                     pass
 
+            recovered_summary, recovered_api_calls = _recover_summary_from_session_log(child)
+            if recovered_summary:
+                return {
+                    "task_index": task_index,
+                    "status": "completed",
+                    "summary": recovered_summary,
+                    "error": None,
+                    "exit_reason": "timeout_after_tool_result" if is_timeout else "recovered_after_error",
+                    "api_calls": recovered_api_calls,
+                    "duration_seconds": duration,
+                    "_child_role": getattr(child, "_delegate_role", None),
+                }
+
             return {
                 "task_index": task_index,
                 "status": "timeout" if is_timeout else "error",
@@ -1227,10 +1319,6 @@ def _run_single_child(
                 "duration_seconds": duration,
                 "_child_role": getattr(child, "_delegate_role", None),
             }
-        finally:
-            # Shut down executor without waiting — if the child thread
-            # is stuck on blocking I/O, wait=True would hang forever.
-            _timeout_executor.shutdown(wait=False)
 
         # Flush any remaining batched progress to gateway
         if child_progress_cb and hasattr(child_progress_cb, "_flush"):
