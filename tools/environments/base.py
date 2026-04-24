@@ -10,6 +10,7 @@ import codecs
 import json
 import logging
 import os
+import platform
 import select
 import shlex
 import subprocess
@@ -24,6 +25,7 @@ from hermes_constants import get_hermes_home
 from tools.interrupt import is_interrupted
 
 logger = logging.getLogger(__name__)
+_IS_WINDOWS = platform.system() == "Windows"
 
 # Opt-in debug tracing for the interrupt/activity/poll machinery.  Set
 # HERMES_DEBUG_INTERRUPT=1 to log loop entry/exit, periodic heartbeats, and
@@ -465,30 +467,45 @@ class BaseEnvironment(ABC):
         decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
         def _drain():
-            fd = proc.stdout.fileno()
-            idle_after_exit = 0
             try:
-                while True:
-                    try:
-                        ready, _, _ = select.select([fd], [], [], 0.1)
-                    except (ValueError, OSError):
-                        break  # fd already closed
-                    if ready:
+                if _IS_WINDOWS:
+                    # Windows doesn't support select() on anonymous pipe fds the
+                    # way Unix does. Read in a dedicated thread instead.
+                    while True:
                         try:
-                            chunk = os.read(fd, 4096)
-                        except (ValueError, OSError):
+                            chunk = proc.stdout.buffer.read1(4096)
+                        except AttributeError:
+                            text_chunk = proc.stdout.read(4096)
+                            chunk = text_chunk.encode("utf-8", errors="replace") if text_chunk else b""
+                        except Exception:
                             break
                         if not chunk:
-                            break  # true EOF — all writers closed
-                        output_chunks.append(decoder.decode(chunk))
-                        idle_after_exit = 0
-                    elif proc.poll() is not None:
-                        # bash is gone and the pipe was idle for ~100ms.  Give
-                        # it two more cycles to catch any buffered tail, then
-                        # stop — otherwise we wait forever on a grandchild pipe.
-                        idle_after_exit += 1
-                        if idle_after_exit >= 3:
                             break
+                        output_chunks.append(decoder.decode(chunk))
+                else:
+                    fd = proc.stdout.fileno()
+                    idle_after_exit = 0
+                    while True:
+                        try:
+                            ready, _, _ = select.select([fd], [], [], 0.1)
+                        except (ValueError, OSError):
+                            break  # fd already closed
+                        if ready:
+                            try:
+                                chunk = os.read(fd, 4096)
+                            except (ValueError, OSError):
+                                break
+                            if not chunk:
+                                break  # true EOF — all writers closed
+                            output_chunks.append(decoder.decode(chunk))
+                            idle_after_exit = 0
+                        elif proc.poll() is not None:
+                            # bash is gone and the pipe was idle for ~100ms.  Give
+                            # it two more cycles to catch any buffered tail, then
+                            # stop — otherwise we wait forever on a grandchild pipe.
+                            idle_after_exit += 1
+                            if idle_after_exit >= 3:
+                                break
             finally:
                 # Flush any bytes buffered mid-sequence.  With ``errors="replace"``
                 # this emits U+FFFD for any final incomplete sequence rather than

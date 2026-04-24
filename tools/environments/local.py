@@ -2,6 +2,7 @@
 
 import os
 import platform
+import re
 import shutil
 import signal
 import subprocess
@@ -153,17 +154,24 @@ def _find_bash() -> str:
     if custom and os.path.isfile(custom):
         return custom
 
-    found = shutil.which("bash")
-    if found:
-        return found
-
-    for candidate in (
+    git_bash_candidates = (
         os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "Git", "bin", "bash.exe"),
         os.path.join(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"), "Git", "bin", "bash.exe"),
         os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Git", "bin", "bash.exe"),
-    ):
+    )
+    for candidate in git_bash_candidates:
         if candidate and os.path.isfile(candidate):
             return candidate
+
+    found = shutil.which("bash")
+    if found:
+        lowered = os.path.normcase(found)
+        if lowered.endswith(os.path.normcase(r"\System32\bash.exe")):
+            raise RuntimeError(
+                "Hermes found Windows' legacy bash.exe instead of Git Bash.\n"
+                "Install Git for Windows or set HERMES_GIT_BASH_PATH to Git's bash.exe."
+            )
+        return found
 
     raise RuntimeError(
         "Git Bash not found. Hermes Agent requires Git for Windows on Windows.\n"
@@ -308,6 +316,27 @@ class LocalEnvironment(BaseEnvironment):
         super().__init__(cwd=cwd or os.getcwd(), timeout=timeout, env=env)
         self.init_session()
 
+    @staticmethod
+    def _to_bash_path(path: str) -> str:
+        """Convert a Windows path into a Git Bash/MSYS-compatible path."""
+        if not (_IS_WINDOWS and path):
+            return path
+
+        normalized = path.replace("\\", "/")
+
+        # Convert drive-qualified paths like P:/Hermes -> /p/Hermes.
+        if re.match(r"^[A-Za-z]:/", normalized):
+            drive = normalized[0].lower()
+            rest = normalized[2:]
+            rest = rest[1:] if rest.startswith("/") else rest
+            return f"/{drive}/{rest}" if rest else f"/{drive}"
+
+        # UNC paths are exposed under the //server/share form in Git Bash.
+        if normalized.startswith("//"):
+            return normalized
+
+        return normalized
+
     def get_temp_dir(self) -> str:
         """Return a shell-safe writable temp dir for local execution.
 
@@ -368,6 +397,10 @@ class LocalEnvironment(BaseEnvironment):
             _pipe_stdin(proc, stdin_data)
 
         return proc
+
+    def _wrap_command(self, command: str, cwd: str) -> str:
+        """Normalize Windows cwd paths before passing them to Git Bash."""
+        return super()._wrap_command(command, self._to_bash_path(cwd))
 
     def _kill_process(self, proc):
         """Kill the entire process group (all children)."""

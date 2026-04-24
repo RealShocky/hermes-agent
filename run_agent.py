@@ -9483,11 +9483,16 @@ class AIAgent:
                         if self.thinking_callback:
                             self.thinking_callback("")
 
+                    _disable_streaming_env = str(
+                        os.getenv("HERMES_DISABLE_STREAMING", "")
+                    ).strip().lower() in {"1", "true", "yes", "on"}
                     _use_streaming = True
                     # Provider signaled "stream not supported" on a previous
                     # attempt — switch to non-streaming for the rest of this
                     # session instead of re-failing every retry.
-                    if getattr(self, "_disable_streaming", False):
+                    if _disable_streaming_env:
+                        _use_streaming = False
+                    elif getattr(self, "_disable_streaming", False):
                         _use_streaming = False
                     elif not self._has_stream_consumers():
                         # No display/TTS consumer. Still prefer streaming for
