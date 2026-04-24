@@ -6,7 +6,13 @@
   "icon": "icon.svg",
   "distribution": {
     "type": "command",
-    "command": "hermes",
-    "args": ["acp"]
+    "command": "powershell.exe",
+    "args": [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "P:\\Hermes\\scripts\\run-hermes-acp.ps1"
+    ]
   }
 }
