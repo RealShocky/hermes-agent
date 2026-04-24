@@ -241,6 +241,16 @@ def _read_terminal_shell_init_config() -> tuple[list[str], bool]:
         return [], True
 
 
+def _expand_shell_init_path(raw: str) -> str:
+    expanded = os.path.expandvars(raw)
+    if expanded == "~" or expanded.startswith("~/") or expanded.startswith("~\\"):
+        home = os.environ.get("HOME")
+        if home:
+            suffix = expanded[1:].lstrip("\\/")
+            return os.path.join(home, suffix) if suffix else home
+    return os.path.expanduser(expanded)
+
+
 def _resolve_shell_init_files() -> list[str]:
     """Resolve the list of files to source before the login-shell snapshot.
 
@@ -254,7 +264,7 @@ def _resolve_shell_init_files() -> list[str]:
     candidates: list[str] = []
     if explicit:
         candidates.extend(explicit)
-    elif auto_bashrc and not _IS_WINDOWS:
+    elif auto_bashrc:
         # Build a login-shell-ish source list so tools like n / nvm / asdf /
         # pyenv that self-install into the user's shell rc land on PATH in
         # the captured snapshot.
@@ -275,7 +285,7 @@ def _resolve_shell_init_files() -> list[str]:
     resolved: list[str] = []
     for raw in candidates:
         try:
-            path = os.path.expandvars(os.path.expanduser(raw))
+            path = os.path.normpath(_expand_shell_init_path(raw))
         except Exception:
             continue
         if path and os.path.isfile(path):
@@ -295,6 +305,8 @@ def _prepend_shell_init(cmd_string: str, files: list[str]) -> str:
 
     prelude_parts = ["set +e"]
     for path in files:
+        if _IS_WINDOWS:
+            path = LocalEnvironment._to_bash_path(path)
         # shlex.quote isn't available here without an import; the files list
         # comes from os.path.expanduser output so it's a concrete absolute
         # path.  Escape single quotes defensively anyway.
@@ -380,6 +392,13 @@ class LocalEnvironment(BaseEnvironment):
         args = [bash, "-l", "-c", cmd_string] if login else [bash, "-c", cmd_string]
         run_env = _make_run_env(self.env)
 
+        # Git Bash reports cwd as MSYS paths such as /tmp/... or /c/Users/...
+        # after commands run. Those paths are valid inside bash but invalid for
+        # Windows CreateProcess(cwd=...), so only pass native cwd values here.
+        popen_cwd = self.cwd
+        if _IS_WINDOWS and not os.path.isdir(popen_cwd):
+            popen_cwd = None
+
         proc = subprocess.Popen(
             args,
             text=True,
@@ -390,7 +409,7 @@ class LocalEnvironment(BaseEnvironment):
             stderr=subprocess.STDOUT,
             stdin=subprocess.PIPE if stdin_data is not None else subprocess.DEVNULL,
             preexec_fn=None if _IS_WINDOWS else os.setsid,
-            cwd=self.cwd,
+            cwd=popen_cwd,
         )
 
         if stdin_data is not None:
