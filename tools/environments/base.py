@@ -10,7 +10,6 @@ import codecs
 import json
 import logging
 import os
-import platform
 import select
 import shlex
 import subprocess
@@ -25,7 +24,6 @@ from hermes_constants import get_hermes_home
 from tools.interrupt import is_interrupted
 
 logger = logging.getLogger(__name__)
-_IS_WINDOWS = platform.system() == "Windows"
 
 # Opt-in debug tracing for the interrupt/activity/poll machinery.  Set
 # HERMES_DEBUG_INTERRUPT=1 to log loop entry/exit, periodic heartbeats, and
@@ -101,12 +99,33 @@ def get_sandbox_dir() -> Path:
 
 
 def _pipe_stdin(proc: subprocess.Popen, data: str) -> None:
-    """Write *data* to proc.stdin on a daemon thread to avoid pipe-buffer deadlocks."""
+    """Write *data* to proc.stdin on a daemon thread to avoid pipe-buffer deadlocks.
+
+    On Windows, text-mode stdin (``text=True`` / ``encoding="utf-8"``)
+    translates ``\\n`` → ``\\r\\n`` as the data flows through the pipe —
+    which corrupts every write_file / patch call because the bytes that
+    land on disk include injected carriage returns.  The file IS created,
+    but every subsequent byte-count / content compare against the
+    caller's ``\\n``-only string fails.
+
+    Workaround: write through ``proc.stdin.buffer`` (the underlying byte
+    buffer), encoding to UTF-8 ourselves.  That bypasses Python's
+    newline translation entirely on every platform.  No behaviour change
+    on POSIX — the byte sequence is identical to what text-mode would
+    produce there.
+    """
 
     def _write():
         try:
-            proc.stdin.write(data)
-            proc.stdin.close()
+            # proc.stdin is a TextIOWrapper when text=True was set on the
+            # Popen.  Its ``.buffer`` attribute is the raw BufferedWriter
+            # that bypasses newline translation.  When Popen was created
+            # in byte mode, proc.stdin is already a BufferedWriter with
+            # no ``.buffer`` attribute — fall back to .write() directly.
+            raw = data.encode("utf-8") if isinstance(data, str) else data
+            target = getattr(proc.stdin, "buffer", proc.stdin)
+            target.write(raw)
+            target.close()
         except (BrokenPipeError, OSError):
             pass
 
@@ -139,7 +158,7 @@ def _load_json_store(path: Path) -> dict:
     """Load a JSON file as a dict, returning ``{}`` on any error."""
     if path.exists():
         try:
-            return json.loads(path.read_text())
+            return json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             pass
     return {}
@@ -148,7 +167,7 @@ def _load_json_store(path: Path) -> dict:
 def _save_json_store(path: Path, data: dict) -> None:
     """Write *data* as pretty-printed JSON to *path*."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2))
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 def _file_mtime_key(host_path: str) -> tuple[float, int] | None:
@@ -337,14 +356,28 @@ class BaseEnvironment(ABC):
         instead of running with ``bash -l``.
         """
         # Full capture: env vars, functions (filtered), aliases, shell options.
+        # Restore configured cwd after login shell profile scripts, which may
+        # change the working directory (e.g. bashrc `cd ~`).  Without this,
+        # pwd -P captures the profile's directory, not terminal.cwd.
+        _quoted_cwd = shlex.quote(self.cwd)
+        # Quote the snapshot / cwd-file paths so Git Bash on Windows handles
+        # ``C:/Users/...``-shaped paths without glob-splitting the colon or
+        # tripping on drive letters.  On POSIX this is a no-op (no colons /
+        # special chars in a /tmp path).  Previously unquoted interpolation
+        # caused ``C:/Users/.../hermes-snap-*.sh: No such file or directory``
+        # errors on Windows, leaking via stderr (merged into stdout on Linux
+        # backends) into every terminal-tool response.
+        _quoted_snap = shlex.quote(self._snapshot_path)
+        _quoted_cwd_file = shlex.quote(self._cwd_file)
         bootstrap = (
-            f"export -p > {self._snapshot_path}\n"
-            f"declare -f | grep -vE '^_[^_]' >> {self._snapshot_path}\n"
-            f"alias -p >> {self._snapshot_path}\n"
-            f"echo 'shopt -s expand_aliases' >> {self._snapshot_path}\n"
-            f"echo 'set +e' >> {self._snapshot_path}\n"
-            f"echo 'set +u' >> {self._snapshot_path}\n"
-            f"pwd -P > {self._cwd_file} 2>/dev/null || true\n"
+            f"export -p > {_quoted_snap}\n"
+            f"declare -f | grep -vE '^_[^_]' >> {_quoted_snap}\n"
+            f"alias -p >> {_quoted_snap}\n"
+            f"echo 'shopt -s expand_aliases' >> {_quoted_snap}\n"
+            f"echo 'set +e' >> {_quoted_snap}\n"
+            f"echo 'set +u' >> {_quoted_snap}\n"
+            f"builtin cd {_quoted_cwd} 2>/dev/null || true\n"
+            f"pwd -P > {_quoted_cwd_file} 2>/dev/null || true\n"
             f"printf '\\n{self._cwd_marker}%s{self._cwd_marker}\\n' \"$(pwd -P)\"\n"
         )
         try:
@@ -370,22 +403,47 @@ class BaseEnvironment(ABC):
     # Command wrapping
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _quote_cwd_for_cd(cwd: str) -> str:
+        """Quote a ``cd`` target while preserving ``~`` expansion."""
+        if cwd == "~":
+            return cwd
+        if cwd == "~/":
+            return "$HOME"
+        if cwd.startswith("~/"):
+            return f"$HOME/{shlex.quote(cwd[2:])}"
+        return shlex.quote(cwd)
+
     def _wrap_command(self, command: str, cwd: str) -> str:
         """Build the full bash script that sources snapshot, cd's, runs command,
         re-dumps env vars, and emits CWD markers."""
         escaped = command.replace("'", "'\\''")
 
+        # Quote the snapshot / cwd-file paths so Git Bash on Windows handles
+        # ``C:/Users/...``-shaped paths without glob-splitting the colon or
+        # tripping on drive letters.  POSIX paths are unaffected.  See
+        # :meth:`init_session` for the same fix on the bootstrap block.
+        _quoted_snap = shlex.quote(self._snapshot_path)
+        _quoted_cwd_file = shlex.quote(self._cwd_file)
+
         parts = []
 
-        # Source snapshot (env vars from previous commands)
+        # Source snapshot (env vars from previous commands).
+        # Redirect stdout to /dev/null: on macOS (bash 3.2 and certain
+        # Homebrew bash builds) sourcing a file containing ``declare -x``
+        # can emit the declarations to stdout, leaking ~60 lines of env
+        # vars into every tool response (issue #15459).  Linux bash is
+        # silent here, but the redirect is harmless.
         if self._snapshot_ready:
-            parts.append(f"source {self._snapshot_path} 2>/dev/null || true")
+            parts.append(
+                f"source {_quoted_snap} >/dev/null 2>&1 || true"
+            )
 
-        # cd to working directory — let bash expand ~ natively
-        quoted_cwd = (
-            shlex.quote(cwd) if cwd != "~" and not cwd.startswith("~/") else cwd
-        )
-        parts.append(f"builtin cd {quoted_cwd} || exit 126")
+        # Preserve bare ``~`` expansion, but rewrite ``~/...`` through
+        # ``$HOME`` so suffixes with spaces remain a single shell word.
+        quoted_cwd = self._quote_cwd_for_cd(cwd)
+        # ``--`` keeps hyphen-prefixed directory names from being parsed as options.
+        parts.append(f"builtin cd -- {quoted_cwd} || exit 126")
 
         # Run the actual command
         parts.append(f"eval '{escaped}'")
@@ -393,10 +451,10 @@ class BaseEnvironment(ABC):
 
         # Re-dump env vars to snapshot (last-writer-wins for concurrent calls)
         if self._snapshot_ready:
-            parts.append(f"export -p > {self._snapshot_path} 2>/dev/null || true")
+            parts.append(f"export -p > {_quoted_snap} 2>/dev/null || true")
 
         # Write CWD to file (local reads this) and stdout marker (remote parses this)
-        parts.append(f"pwd -P > {self._cwd_file} 2>/dev/null || true")
+        parts.append(f"pwd -P > {_quoted_cwd_file} 2>/dev/null || true")
         # Use a distinct line for the marker. The leading \n ensures
         # the marker starts on its own line even if the command doesn't
         # end with a newline (e.g. printf 'exact'). We'll strip this
@@ -467,45 +525,50 @@ class BaseEnvironment(ABC):
         decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
         def _drain():
-            try:
-                if _IS_WINDOWS:
-                    # Windows doesn't support select() on anonymous pipe fds the
-                    # way Unix does. Read in a dedicated thread instead.
+            fd = proc.stdout.fileno()
+            # select.select does NOT work on pipe fds on Windows (only sockets).
+            # Use blocking os.read in a daemon thread instead — safe because
+            # EOF arrives promptly when bash exits.
+            if os.name == "nt":
+                try:
                     while True:
-                        try:
-                            chunk = proc.stdout.buffer.read1(4096)
-                        except AttributeError:
-                            text_chunk = proc.stdout.read(4096)
-                            chunk = text_chunk.encode("utf-8", errors="replace") if text_chunk else b""
-                        except Exception:
-                            break
+                        chunk = os.read(fd, 4096)
                         if not chunk:
                             break
                         output_chunks.append(decoder.decode(chunk))
-                else:
-                    fd = proc.stdout.fileno()
-                    idle_after_exit = 0
-                    while True:
+                except (ValueError, OSError):
+                    pass
+                finally:
+                    try:
+                        tail = decoder.decode(b"", final=True)
+                        if tail:
+                            output_chunks.append(tail)
+                    except Exception:
+                        pass
+                return
+            idle_after_exit = 0
+            try:
+                while True:
+                    try:
+                        ready, _, _ = select.select([fd], [], [], 0.1)
+                    except (ValueError, OSError):
+                        break  # fd already closed
+                    if ready:
                         try:
-                            ready, _, _ = select.select([fd], [], [], 0.1)
+                            chunk = os.read(fd, 4096)
                         except (ValueError, OSError):
-                            break  # fd already closed
-                        if ready:
-                            try:
-                                chunk = os.read(fd, 4096)
-                            except (ValueError, OSError):
-                                break
-                            if not chunk:
-                                break  # true EOF — all writers closed
-                            output_chunks.append(decoder.decode(chunk))
-                            idle_after_exit = 0
-                        elif proc.poll() is not None:
-                            # bash is gone and the pipe was idle for ~100ms.  Give
-                            # it two more cycles to catch any buffered tail, then
-                            # stop — otherwise we wait forever on a grandchild pipe.
-                            idle_after_exit += 1
-                            if idle_after_exit >= 3:
-                                break
+                            break
+                        if not chunk:
+                            break  # true EOF — all writers closed
+                        output_chunks.append(decoder.decode(chunk))
+                        idle_after_exit = 0
+                    elif proc.poll() is not None:
+                        # bash is gone and the pipe was idle for ~100ms.  Give
+                        # it two more cycles to catch any buffered tail, then
+                        # stop — otherwise we wait forever on a grandchild pipe.
+                        idle_after_exit += 1
+                        if idle_after_exit >= 3:
+                            break
             finally:
                 # Flush any bytes buffered mid-sequence.  With ``errors="replace"``
                 # this emits U+FFFD for any final incomplete sequence rather than
