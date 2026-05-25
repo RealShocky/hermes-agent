@@ -871,18 +871,18 @@ hermes model
 # If LM Studio server auth is enabled, enter LM_API_KEY when prompted
 ```
 
-Hermes will automatically load a LM Studio model with 64K context length
+Hermes will automatically load a LM Studio model with 32K context length
 
 To change context length in LM Studio:
 
 1. Click the gear icon next to the model picker
-2. Set "Context Length" to at least 64000 for a smooth experience
+2. Set "Context Length" to at least 32000 for a smooth experience
 3. Reload the model for the change to take effect
-4. If your machine cannot fit 64000, consider using a smaller model with larger context lengths.
+4. If your machine cannot fit 32000, consider using a smaller model with larger context lengths.
 
-Alternatively, use the CLI: `lms load model-name --context-length 64000`
+Alternatively, use the CLI: `lms load model-name --context-length 32000`
 
-You can use the CLI to estimate if the model will fit: `lms load model-name --context-length 64000 --estimate-only`
+You can use the CLI to estimate if the model will fit: `lms load model-name --context-length 32000 --estimate-only`
 
 To set persistent per-model defaults: My Models tab → gear icon on the model → set context size.
 :::
