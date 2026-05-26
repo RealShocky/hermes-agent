@@ -1,0 +1,79 @@
+name: Post-Merge Deploy
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, hermes-core]
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      
+      - name: Deploy Hermes Core
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $deployScript = "${{ github.workspace }}/../infra-ops/deploy/deploy-service.ps1"
+          if (Test-Path $deployScript) {
+            & $deployScript -ServiceName "hermes-core"
+          } else {
+            Write-Error "Deploy script not found: $deployScript"
+            exit 1
+          }
+      
+      - name: Health Check
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $healthScript = "${{ github.workspace }}/../infra-ops/healthchecks/check-process.ps1"
+          if (Test-Path $healthScript) {
+            & $healthScript -ServiceName "hermes-core"
+          } else {
+            Write-Warning "Health check script not found: $healthScript"
+          }
+        timeout-minutes: 5
+      
+      - name: Notify Discord on Success
+        if: success()
+        shell: powershell
+        run: |
+          $webhook = $env:DISCORD_WEBHOOK_URL
+          if ($webhook) {
+            $body = @{
+              content = "✅ HERMES_CORE_FORK deployed successfully to production"
+            } | ConvertTo-Json -Compress
+            Invoke-RestMethod -Uri $webhook -Method Post -ContentType "application/json" -Body $body
+          }
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      
+      - name: Rollback on Failure
+        if: failure()
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $rollbackScript = "${{ github.workspace }}/../infra-ops/rollback/rollback-service.ps1"
+          if (Test-Path $rollbackScript) {
+            & $rollbackScript -ServiceName "hermes-core"
+          }
+          
+          # Notify Discord of failure
+          $webhook = $env:DISCORD_WEBHOOK_URL
+          if ($webhook) {
+            $body = @{
+              content = "❌ HERMES_CORE_FORK deploy failed. Rollback initiated."
+            } | ConvertTo-Json -Compress
+            Invoke-RestMethod -Uri $webhook -Method Post -ContentType "application/json" -Body $body
+          }
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
