@@ -38,6 +38,10 @@ _SUPPORTED_PREFIXES = ("gho_", "github_pat_", "ghu_")
 # Env var search order (matches Copilot CLI)
 COPILOT_ENV_VARS = ("COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN")
 
+# Env vars for autonomous operations -- GITHUB_TOKEN (PAT) is excluded and
+# reserved for admin / emergency use only.  See ROADMAP #6.
+AUTONOMY_ENV_VARS = ("COPILOT_GITHUB_TOKEN", "GH_TOKEN")
+
 # Polling constants
 _DEVICE_CODE_POLL_INTERVAL = 5  # seconds
 _DEVICE_CODE_POLL_SAFETY_MARGIN = 3  # seconds
@@ -92,6 +96,47 @@ def resolve_copilot_token() -> tuple[str, str]:
             )
         return token, "gh auth token"
 
+    return "", ""
+
+
+def autonomy_token_from_env() -> tuple[str, str]:
+    """Resolve a GitHub token for autonomous operations without PAT fallback.
+
+    Unlike ``resolve_copilot_token``, this function does NOT fall back to
+    ``GITHUB_TOKEN`` (PAT).  The PAT is reserved for admin / emergency use
+    only -- autonomous agent workflows should use OAuth-based tokens
+    (COPILOT_GITHUB_TOKEN, GH_TOKEN) or the gh CLI credential store.
+
+    Returns (token, source) where source describes where the token came from.
+    Returns ("", "") if no suitable token is found.
+    """
+    # 1. Check non-PAT env vars in priority order
+    for env_var in AUTONOMY_ENV_VARS:
+        val = os.getenv(env_var, "").strip()
+        if val:
+            valid, msg = validate_copilot_token(val)
+            if not valid:
+                logger.warning(
+                    "Token from %s is not supported for autonomous use: %s",
+                    env_var, msg,
+                )
+                continue
+            return val, env_var
+
+    # 2. Fall back to gh auth token (reads from gh CLI credential store)
+    token = _try_gh_cli_token()
+    if token:
+        valid, msg = validate_copilot_token(token)
+        if not valid:
+            logger.warning(
+                "Token from gh auth token is not supported for autonomous use: %s",
+                msg,
+            )
+            return "", ""
+        return token, "gh auth token"
+
+    # 3. No suitable token found -- GITHUB_TOKEN (PAT) is intentionally
+    #    NOT checked here.  Set it explicitly for admin/emergency use.
     return "", ""
 
 

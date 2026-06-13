@@ -523,7 +523,7 @@ def do_install(identifier: str, category: str = "", force: bool = False,
             c.print(
                 "[yellow]Hint:[/] GitHub API rate limit exhausted "
                 "(unauthenticated: 60 requests/hour).\n"
-                "Set [bold]GITHUB_TOKEN[/] in your .env or install the "
+                "Set [bold]COPILOT_GITHUB_TOKEN[/] or [bold]GH_TOKEN[/] in your .env, or install the "
                 "[bold]gh[/] CLI and run [bold]gh auth login[/] "
                 "to raise the limit to 5,000/hr.\n"
             )
@@ -1387,7 +1387,8 @@ def do_publish(skill_path: str, target: str = "github", repo: str = "",
         auth = GitHubAuth()
         if not auth.is_authenticated():
             c.print("[bold red]Error:[/] GitHub authentication required.\n"
-                    f"Set GITHUB_TOKEN in {display_hermes_home()}/.env or run 'gh auth login'.\n")
+                    f"Set COPILOT_GITHUB_TOKEN or GH_TOKEN in {display_hermes_home()}/.env, "
+                    "or run 'gh auth login'.\n")
             return
 
         c.print(f"[bold]Publishing '{name}' to {repo}...[/]")

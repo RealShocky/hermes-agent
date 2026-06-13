@@ -107,6 +107,61 @@ class TestResolveToken:
         assert source == ""
 
 
+class TestAutonomyTokenFromEnv:
+    """autonomy_token_from_env excludes GITHUB_TOKEN (PAT) for autonomous use."""
+
+    def test_copilot_github_token_first(self, monkeypatch):
+        from hermes_cli.copilot_auth import autonomy_token_from_env
+        monkeypatch.setenv("COPILOT_GITHUB_TOKEN", "gho_copilot_first")
+        monkeypatch.setenv("GH_TOKEN", "gho_gh_second")
+        monkeypatch.setenv("GITHUB_TOKEN", "gho_github_third")
+        token, source = autonomy_token_from_env()
+        assert token == "gho_copilot_first"
+        assert source == "COPILOT_GITHUB_TOKEN"
+
+    def test_gh_token_second(self, monkeypatch):
+        from hermes_cli.copilot_auth import autonomy_token_from_env
+        monkeypatch.delenv("COPILOT_GITHUB_TOKEN", raising=False)
+        monkeypatch.setenv("GH_TOKEN", "gho_gh_second")
+        monkeypatch.setenv("GITHUB_TOKEN", "gho_github_third")
+        token, source = autonomy_token_from_env()
+        assert token == "gho_gh_second"
+        assert source == "GH_TOKEN"
+
+    def test_github_token_not_used(self, monkeypatch):
+        """GITHUB_TOKEN (PAT) is intentionally NOT used by autonomy_token_from_env."""
+        from hermes_cli.copilot_auth import autonomy_token_from_env
+        monkeypatch.delenv("COPILOT_GITHUB_TOKEN", raising=False)
+        monkeypatch.delenv("GH_TOKEN", raising=False)
+        monkeypatch.setenv("GITHUB_TOKEN", "gho_github_pat")
+        with patch("hermes_cli.copilot_auth._try_gh_cli_token", return_value=None):
+            token, source = autonomy_token_from_env()
+        # Should return empty, NOT fall back to GITHUB_TOKEN
+        assert token == ""
+        assert source == ""
+
+    def test_gh_cli_fallback_works(self, monkeypatch):
+        from hermes_cli.copilot_auth import autonomy_token_from_env
+        monkeypatch.delenv("COPILOT_GITHUB_TOKEN", raising=False)
+        monkeypatch.delenv("GH_TOKEN", raising=False)
+        monkeypatch.setenv("GITHUB_TOKEN", "gho_should_not_use")
+        with patch("hermes_cli.copilot_auth._try_gh_cli_token", return_value="gho_from_cli"):
+            token, source = autonomy_token_from_env()
+        assert token == "gho_from_cli"
+        assert source == "gh auth token"
+
+    def test_classic_pat_in_autonomy_env_skipped(self, monkeypatch):
+        """Classic PATs in COPILOT_GITHUB_TOKEN or GH_TOKEN are skipped."""
+        from hermes_cli.copilot_auth import autonomy_token_from_env
+        monkeypatch.setenv("COPILOT_GITHUB_TOKEN", "ghp_classic_pat")
+        monkeypatch.setenv("GH_TOKEN", "gho_valid")
+        monkeypatch.setenv("GITHUB_TOKEN", "gho_github")
+        token, source = autonomy_token_from_env()
+        # Should skip ghp_ and use GH_TOKEN
+        assert token == "gho_valid"
+        assert source == "GH_TOKEN"
+
+
 class TestRequestHeaders:
     """Copilot API header generation."""
 
