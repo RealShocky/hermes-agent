@@ -35,6 +35,9 @@
     "@streamdown/math": "^1.0.2",
     "agent-browser": "^0.26.0"
   },
+  "optionalDependencies": {
+    "@esbuild/linux-x64": "0.28.1"
+  },
   "overrides": {
     "esbuild": "0.28.1",
     "joi": "18.2.1",
