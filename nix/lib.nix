@@ -21,7 +21,7 @@ let
 
   # Single npm deps fetch from the workspace root lockfile.
   # All workspace packages share this derivation.
-  npmDepsHash = "sha256-RLraluZYEWfg1cP4SFDlMo2qJ4eHWVkmQevMGThvxHA=";
+  npmDepsHash = "sha256-cCa0uASIH1rmjEKPwSImp7o0y5ID5FGWRBu/FwQDYKY=";
 
   npmDeps = pkgs.fetchNpmDeps {
     inherit src;
@@ -268,6 +268,19 @@ in
         fi
       fi
 
+      # prefetch-npm-deps can also disagree in the opposite direction: it may
+      # report a different lockfile-only hash while the committed fetchNpmDeps
+      # hash is already valid. Confirm the current npmDeps derivation before
+      # declaring it stale, otherwise --check fails and --apply tries to commit
+      # an unchanged file after its verification retry restores OLD_HASH.
+      if nix build ".#${attr}.npmDeps" --no-link --print-build-logs 2>/dev/null; then
+        echo "ok (verified committed npmDepsHash)"
+        if [ -n "''${GITHUB_OUTPUT:-}" ]; then
+          { echo "stale=false"; echo "changed=false"; } >> "$GITHUB_OUTPUT"
+        fi
+        exit 0
+      fi
+
       HASH_LINE=$(grep -n 'npmDepsHash = "sha256-' "$LIB_FILE" | head -1 | cut -d: -f1)
       echo "stale: $LIB_FILE:$HASH_LINE $OLD_HASH -> $NEW_HASH"
       STALE=1
@@ -311,7 +324,7 @@ in
           [ "$FIXED" -eq 1 ] && echo "changed=true" || echo "changed=false"
           if [ -n "$REPORT" ]; then
             echo "report<<REPORT_EOF"
-            printf "%s" "$REPORT"
+            printf "%s\n" "$REPORT"
             echo "REPORT_EOF"
           fi
         } >> "$GITHUB_OUTPUT"

@@ -1,0 +1,14 @@
+{
+  "name": "operator-brain",
+  "label": "Operator Brain",
+  "description": "Live autonomous engineering world: planners, tasks, repos, cycles, PRs, tools, and skills",
+  "icon": "BrainCircuit",
+  "version": "1.0.0",
+  "tab": {
+    "path": "/operator-brain",
+    "position": "after:kanban"
+  },
+  "entry": "dist/index.js",
+  "css": "dist/style.css",
+  "api": "plugin_api.py"
+}

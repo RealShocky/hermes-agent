@@ -1,0 +1,8 @@
+.ob-page { padding: 1.5rem; display: grid; gap: 1.5rem; }
+.ob-header { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.ob-header h1, .ob-section h2 { margin: 0; }
+.ob-header p { margin: .25rem 0 0; opacity: .7; }
+.ob-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .75rem; }
+.ob-section { display: grid; gap: .75rem; }
+.ob-section strong { display: block; margin-bottom: .35rem; }
+.ob-error { color: var(--destructive); padding: 1rem; }
