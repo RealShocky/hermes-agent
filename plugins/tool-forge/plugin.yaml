@@ -1,0 +1,8 @@
+name: tool-forge
+version: 1.0.0
+description: Assess recurring capability gaps and submit auditable native-tool proposals to the autonomous operator.
+author: Hermes
+kind: standalone
+provides_tools:
+  - tool_forge_assess
+  - tool_forge_propose
