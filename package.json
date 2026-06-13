@@ -36,6 +36,7 @@
     "agent-browser": "^0.26.0"
   },
   "optionalDependencies": {
+    "@esbuild/darwin-arm64": "0.28.1",
     "@esbuild/linux-x64": "0.28.1"
   },
   "overrides": {
