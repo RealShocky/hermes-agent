@@ -21,7 +21,7 @@ let
 
   # Single npm deps fetch from the workspace root lockfile.
   # All workspace packages share this derivation.
-  npmDepsHash = "sha256-DTBc9vp5GZTBE8BKynkhYGyIgDjO/jNGzr6jRIvAq1w=";
+  npmDepsHash = "sha256-9UvqGYXXkKLDeDtTcP99LnMf25LIAp86d3PB7V9NZ4c=";
 
   npmDeps = pkgs.fetchNpmDeps {
     inherit src;
@@ -311,7 +311,7 @@ in
           [ "$FIXED" -eq 1 ] && echo "changed=true" || echo "changed=false"
           if [ -n "$REPORT" ]; then
             echo "report<<REPORT_EOF"
-            printf "%s" "$REPORT"
+            printf "%s\n" "$REPORT"
             echo "REPORT_EOF"
           fi
         } >> "$GITHUB_OUTPUT"
