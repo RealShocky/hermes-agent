@@ -33,6 +33,34 @@ from tools.skills_hub import (
 
 
 # ---------------------------------------------------------------------------
+# GitHubAuth
+# ---------------------------------------------------------------------------
+
+
+class TestGitHubAuth:
+    def test_prefers_non_pat_environment_token(self, monkeypatch):
+        monkeypatch.setenv("COPILOT_GITHUB_TOKEN", "gho_copilot")
+        monkeypatch.setenv("GH_TOKEN", "gho_gh")
+        monkeypatch.setenv("GITHUB_TOKEN", "ghp_admin_only")
+
+        auth = GitHubAuth()
+
+        assert auth.get_headers()["Authorization"] == "token gho_copilot"
+        assert auth.auth_method() == "env"
+
+    def test_does_not_use_github_token_pat(self, monkeypatch):
+        monkeypatch.delenv("COPILOT_GITHUB_TOKEN", raising=False)
+        monkeypatch.delenv("GH_TOKEN", raising=False)
+        monkeypatch.setenv("GITHUB_TOKEN", "ghp_admin_only")
+
+        auth = GitHubAuth()
+        with patch.object(auth, "_try_gh_cli", return_value=None), \
+             patch.object(auth, "_try_github_app", return_value=None):
+            assert auth.get_headers() == {"Accept": "application/vnd.github.v3+json"}
+            assert auth.auth_method() == "anonymous"
+
+
+# ---------------------------------------------------------------------------
 # GitHubSource._parse_frontmatter_quick
 # ---------------------------------------------------------------------------
 

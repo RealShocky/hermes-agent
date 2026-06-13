@@ -3,7 +3,7 @@
 Skills Hub — Source adapters and hub state management for the Hermes Skills Hub.
 
 This is a library module (not an agent tool). It provides:
-  - GitHubAuth: Shared GitHub API authentication (PAT, gh CLI, GitHub App)
+  - GitHubAuth: Shared GitHub API authentication (env tokens, gh CLI, GitHub App)
   - SkillSource ABC: Interface for all skill registry adapters
   - OptionalSkillSource: Official optional skills shipped with the repo (not activated by default)
   - GitHubSource: Fetch skills from any GitHub repo via the Contents API
@@ -237,10 +237,13 @@ def _validate_bundle_rel_path(rel_path: str) -> str:
 class GitHubAuth:
     """
     GitHub API authentication. Tries methods in priority order:
-      1. GITHUB_TOKEN / GH_TOKEN env var (PAT — the default)
+      1. COPILOT_GITHUB_TOKEN / GH_TOKEN env var (non-PAT token)
       2. `gh auth token` subprocess (if gh CLI is installed)
       3. GitHub App JWT + installation token (if app credentials configured)
       4. Unauthenticated (60 req/hr, public repos only)
+
+    Note: GITHUB_TOKEN (PAT) is intentionally NOT used for autonomous
+    operations.  It is reserved for admin / emergency use only (ROADMAP #6).
     """
 
     def __init__(self):
@@ -260,7 +263,7 @@ class GitHubAuth:
         return self._resolve_token() is not None
 
     def auth_method(self) -> str:
-        """Return which auth method is active: 'pat', 'gh-cli', 'github-app', or 'anonymous'."""
+        """Return which auth method is active: 'env', 'gh-cli', 'github-app', or 'anonymous'."""
         self._resolve_token()
         return self._cached_method or "anonymous"
 
@@ -270,11 +273,13 @@ class GitHubAuth:
             if self._cached_method != "github-app" or time.time() < self._app_token_expiry:
                 return self._cached_token
 
-        # 1. Environment variable
-        token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+        # 1. Non-PAT environment variables (COPILOT_GITHUB_TOKEN / GH_TOKEN)
+        #    GITHUB_TOKEN (PAT) is intentionally excluded -- reserved for
+        #    admin / emergency use only (ROADMAP #6).
+        token = os.environ.get("COPILOT_GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
         if token:
             self._cached_token = token
-            self._cached_method = "pat"
+            self._cached_method = "env"
             return token
 
         # 2. gh CLI
@@ -643,7 +648,7 @@ class GitHubSource(SkillSource):
                 self._rate_limited = True
                 logger.warning(
                     "GitHub API rate limit exhausted (unauthenticated: 60 req/hr). "
-                    "Set GITHUB_TOKEN or install the gh CLI to raise the limit to 5,000/hr."
+                    "Set COPILOT_GITHUB_TOKEN or GH_TOKEN, or install the gh CLI to raise the limit to 5,000/hr."
                 )
 
     def _github_get(
