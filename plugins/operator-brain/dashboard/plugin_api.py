@@ -73,6 +73,7 @@ async def snapshot():
     reconciles = _latest("*_pr_reconcile.json", 5)
     brain_state = planner[0].get("brain_state", {}) if planner else {}
     active = [item for item in coding if item.get("status") not in {"passed", "idle"}][:1]
+    proving_ground = _json(_wrapper_root() / "runtime" / "overwatch_proving_ground.json")
     return {
         "operator": {
             "paused": (_wrapper_root() / ".pause_operator").exists(),
@@ -93,4 +94,5 @@ async def snapshot():
         "pull_requests": reconciles,
         "workspaces": _workspaces(),
         "skills": _skills(),
+        "proving_ground": proving_ground,
     }
