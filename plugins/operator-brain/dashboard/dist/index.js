@@ -26,11 +26,31 @@
     }, []);
     if (error) return h("div", { className: "ob-error" }, error);
     if (!data) return h("div", null, "Loading Operator Brain...");
+    const proving = data.proving_ground || {};
     return h("div", { className: "ob-page" },
       h("header", { className: "ob-header" },
         h("div", null, h("h1", null, "Operator Brain"), h("p", null, "The autonomous engineering world, live.")),
         h(Button, { onClick: load, size: "sm" }, "Refresh"),
         h(Badge, null, data.operator.paused ? "Paused" : "Running")),
+      section("Overwatch Proving Ground", [proving], function (item) {
+        return h(Card, { key: "overwatch-proving-ground" }, h(CardContent, null,
+          h("strong", null, "Phase " + String(item.current_phase || "?") + " / " + String(item.pending_total || 0) + " tasks pending"),
+          h("div", null, String(item.consecutive_successes || 0) + " consecutive successes; target " + String(item.target_attempts || 10)),
+          h("div", null, "PR: " + String((item.latest_pull_request || {}).status || "none") +
+            " / merge: " + String((item.latest_merge || {}).status || "none") +
+            " / validation: " + String((item.latest_validation || {}).status || "unknown")),
+          h(Badge, null, item.model_blocked ? "Blocked: model offline" : (item.ready_for_more_repos ? "Ready for more repos" : "Benchmark running"))));
+      }),
+      section("Overwatch Benchmark Attempts", proving.attempts || [], function (item, index) {
+        const stages = item.stages || {};
+        const stageText = ["coding", "pull_request", "merged", "deployed", "healthcheck"]
+          .map(function (name) { return name + ":" + (stages[name] ? "pass" : "wait"); }).join(" / ");
+        return h(Card, { key: item.timestamp || index }, h(CardContent, null,
+          h("strong", null, item.summary || "Attempt"),
+          h("div", null, stageText),
+          item.retry_reason ? h("div", null, "Retry reason: " + item.retry_reason) : null,
+          h(Badge, null, item.status || "incomplete")));
+      }),
       section("Agents", data.agents, function (item) {
         return h(Card, { key: item.name }, h(CardContent, null,
           h("strong", null, item.name), h("div", null, item.role), h(Badge, null, item.status)));
