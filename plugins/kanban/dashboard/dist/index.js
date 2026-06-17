@@ -602,7 +602,17 @@
         // ``current`` file — same rationale as ``withBoard()`` above.
         // Regression: #20879.
         if (board) wsParams.board = board;
-        SDK.buildWsUrl(`${API}/events`, wsParams).then(function (url) {
+        const buildKanbanWsUrl = SDK.buildWsUrl
+          ? SDK.buildWsUrl.bind(SDK)
+          : function (path, params) {
+              const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+              const base = (window.__HERMES_BASE_PATH__ || "").replace(/\/$/, "");
+              const query = new URLSearchParams(params || {});
+              const token = window.__HERMES_SESSION_TOKEN__ || "";
+              if (token && !query.has("token")) query.set("token", token);
+              return Promise.resolve(`${proto}//${window.location.host}${base}${path}?${query.toString()}`);
+            };
+        buildKanbanWsUrl(`${API}/events`, wsParams).then(function (url) {
           if (wsClosedRef.current) return;
           let ws;
           try { ws = new WebSocket(url); } catch (_e) { return; }
