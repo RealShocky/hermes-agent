@@ -27,6 +27,8 @@
     if (error) return h("div", { className: "ob-error" }, error);
     if (!data) return h("div", null, "Loading Operator Brain...");
     const proving = data.proving_ground || {};
+    const cleanup = data.workspace_cleanup || {};
+    const lifecycle = data.branch_lifecycle || {};
     return h("div", { className: "ob-page" },
       h("header", { className: "ob-header" },
         h("div", null, h("h1", null, "Operator Brain"), h("p", null, "The autonomous engineering world, live.")),
@@ -41,6 +43,22 @@
             " / validation: " + String((item.latest_validation || {}).status || "unknown")),
           h(Badge, null, item.model_blocked ? "Blocked: model offline" : (item.ready_for_more_repos ? "Ready for more repos" : "Benchmark running"))));
       }),
+      section("Workspace Cleanup", cleanup.results || lifecycle.sync_results || [], function (item, index) {
+        const classification = item.classification || item;
+        return h(Card, { key: item.workspace || index }, h(CardContent, null,
+          h("strong", null, item.workspace || "Workspace"),
+          h("div", null, "branch: " + String(item.branch || "?")),
+          h("div", null, String(classification.reason || item.reason || "")),
+          item.backup_branch ? h("div", null, "backup: " + item.backup_branch) : null,
+          h(Badge, null, String(classification.status || item.status || "unknown"))));
+      }),
+      section("Branch Lifecycle", lifecycle.pruned_branches || [], function (item, index) {
+        return h(Card, { key: (item.workspace || "") + (item.branch || index) }, h(CardContent, null,
+          h("strong", null, item.branch || "Branch"),
+          h("div", null, item.workspace || ""),
+          h("div", null, "reason: " + String(item.reason || "unknown")),
+          h(Badge, null, "pruned")));
+      }),
       section("Overwatch Benchmark Attempts", proving.attempts || [], function (item, index) {
         const stages = item.stages || {};
         const stageText = ["coding", "pull_request", "merged", "deployed", "healthcheck"]
@@ -48,6 +66,7 @@
         return h(Card, { key: item.timestamp || index }, h(CardContent, null,
           h("strong", null, item.summary || "Attempt"),
           h("div", null, stageText),
+          item.failure_type ? h("div", null, "Failure: " + item.failure_type) : null,
           item.retry_reason ? h("div", null, "Retry reason: " + item.retry_reason) : null,
           h(Badge, null, item.status || "incomplete")));
       }),

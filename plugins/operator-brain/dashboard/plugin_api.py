@@ -74,6 +74,8 @@ async def snapshot():
     brain_state = planner[0].get("brain_state", {}) if planner else {}
     active = [item for item in coding if item.get("status") not in {"passed", "idle"}][:1]
     proving_ground = _json(_wrapper_root() / "runtime" / "overwatch_proving_ground.json")
+    workspace_cleanup = _json(_wrapper_root() / "runtime" / "workspace_cleanup.json")
+    branch_lifecycle = _json(_wrapper_root() / "runtime" / "branch_lifecycle.json")
     return {
         "operator": {
             "paused": (_wrapper_root() / ".pause_operator").exists(),
@@ -95,4 +97,6 @@ async def snapshot():
         "workspaces": _workspaces(),
         "skills": _skills(),
         "proving_ground": proving_ground,
+        "workspace_cleanup": workspace_cleanup,
+        "branch_lifecycle": branch_lifecycle,
     }
