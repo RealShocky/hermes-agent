@@ -76,6 +76,8 @@ async def snapshot():
     proving_ground = _json(_wrapper_root() / "runtime" / "overwatch_proving_ground.json")
     workspace_cleanup = _json(_wrapper_root() / "runtime" / "workspace_cleanup.json")
     branch_lifecycle = _json(_wrapper_root() / "runtime" / "branch_lifecycle.json")
+    native_tool_lifecycle = _json(_wrapper_root() / "runtime" / "native_tool_lifecycle.json")
+    expansion_readiness = _json(_wrapper_root() / "runtime" / "expansion_readiness.json")
     return {
         "operator": {
             "paused": (_wrapper_root() / ".pause_operator").exists(),
@@ -99,4 +101,6 @@ async def snapshot():
         "proving_ground": proving_ground,
         "workspace_cleanup": workspace_cleanup,
         "branch_lifecycle": branch_lifecycle,
+        "native_tool_lifecycle": native_tool_lifecycle,
+        "expansion_readiness": expansion_readiness,
     }
