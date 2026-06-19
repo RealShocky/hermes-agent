@@ -29,6 +29,7 @@
     const proving = data.proving_ground || {};
     const cleanup = data.workspace_cleanup || {};
     const lifecycle = data.branch_lifecycle || {};
+    const machineOps = data.machine_ops || {};
     return h("div", { className: "ob-page" },
       h("header", { className: "ob-header" },
         h("div", null, h("h1", null, "Operator Brain"), h("p", null, "The autonomous engineering world, live.")),
@@ -58,6 +59,17 @@
           h("div", null, item.workspace || ""),
           h("div", null, "reason: " + String(item.reason || "unknown")),
           h(Badge, null, "pruned")));
+      }),
+      section("Machine Ops", machineOps.latest_requests || [], function (item, index) {
+        return h(Card, { key: item.id || item.file || index }, h(CardContent, null,
+          h("strong", null, item.action || "Machine operation"),
+          h("div", null, item.reason || ""),
+          h("div", null, "risk: " + String(item.risk || "unknown") +
+            " / approval: " + (item.approval_required ? "human" : "auto") +
+            " / exec: " + String(item.execution_status || item.dry_run_status || "not run")),
+          item.expected_impact ? h("div", null, "impact: " + item.expected_impact) : null,
+          item.rollback ? h("div", null, "rollback: " + item.rollback) : null,
+          h(Badge, null, item.status || "unknown")));
       }),
       section("Overwatch Benchmark Attempts", proving.attempts || [], function (item, index) {
         const stages = item.stages || {};

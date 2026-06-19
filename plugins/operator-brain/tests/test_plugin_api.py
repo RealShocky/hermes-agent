@@ -26,7 +26,14 @@ def test_snapshot_exposes_proving_ground(tmp_path, monkeypatch) -> None:
     (runtime / "branch_lifecycle.json").write_text('{"pruned_branches":[{"branch":"auto/demo"}]}', encoding="utf-8")
     (runtime / "native_tool_lifecycle.json").write_text('{"gate":"overwatch_proving_ground"}', encoding="utf-8")
     (runtime / "expansion_readiness.json").write_text('{"ready_for_more_repos":false}', encoding="utf-8")
+    machine_ops = tmp_path / "machine-ops" / "pending"
+    machine_ops.mkdir(parents=True)
+    (machine_ops / "request.json").write_text(
+        '{"id":"req-1","status":"approved","action":"qwen.restart","risk":"medium","reason":"test"}',
+        encoding="utf-8",
+    )
     monkeypatch.setenv("HERMES_OPERATOR_ROOT", str(tmp_path))
+    monkeypatch.setenv("HERMES_MACHINE_OPS_ROOT", str(tmp_path / "machine-ops"))
 
     import asyncio
     payload = asyncio.run(plugin_api.snapshot())
@@ -36,3 +43,6 @@ def test_snapshot_exposes_proving_ground(tmp_path, monkeypatch) -> None:
     assert payload["branch_lifecycle"]["pruned_branches"][0]["branch"] == "auto/demo"
     assert payload["native_tool_lifecycle"]["gate"] == "overwatch_proving_ground"
     assert payload["expansion_readiness"]["ready_for_more_repos"] is False
+    assert payload["machine_ops"]["total"] == 1
+    assert payload["machine_ops"]["by_action"]["qwen.restart"] == 1
+    assert payload["machine_ops"]["latest_requests"][0]["reason"] == "test"
