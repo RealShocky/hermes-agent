@@ -17,6 +17,10 @@ def _wrapper_root() -> Path:
     return Path(os.environ.get("HERMES_OPERATOR_ROOT", "P:/Hermes/hermes-wrapper"))
 
 
+def _hermes_root() -> Path:
+    return Path(os.environ.get("HERMES_ROOT", str(_wrapper_root().parent)))
+
+
 def _json(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -64,6 +68,58 @@ def _skills() -> list[dict[str, Any]]:
     return result[:100]
 
 
+def _machine_ops() -> dict[str, Any]:
+    root = Path(os.environ.get("HERMES_MACHINE_OPS_ROOT", str(_hermes_root() / "runtime" / "machine-ops")))
+    requests: list[dict[str, Any]] = []
+    for folder in ("pending", "approved", "executed", "failed"):
+        request_dir = root / folder
+        if not request_dir.exists():
+            continue
+        for path in request_dir.glob("*.json"):
+            payload = _json(path)
+            if not payload:
+                continue
+            payload = {
+                "file": path.name,
+                "folder": folder,
+                "id": payload.get("id"),
+                "created_at": payload.get("created_at"),
+                "status": payload.get("status", folder),
+                "action": payload.get("action"),
+                "risk": payload.get("risk"),
+                "approval_required": payload.get("approval_required"),
+                "approved_by": payload.get("approved_by"),
+                "approved_at": payload.get("approved_at"),
+                "executed_at": payload.get("executed_at"),
+                "reason": payload.get("reason"),
+                "expected_impact": payload.get("expected_impact"),
+                "rollback": payload.get("rollback"),
+                "execution_status": (payload.get("execution") or {}).get("status"),
+                "execution_exit_code": (payload.get("execution") or {}).get("exit_code"),
+                "dry_run_status": (payload.get("last_dry_run") or {}).get("status"),
+            }
+            requests.append(payload)
+    requests.sort(key=lambda item: str(item.get("created_at") or item.get("id") or ""), reverse=True)
+    by_status: dict[str, int] = {}
+    by_action: dict[str, int] = {}
+    by_risk: dict[str, int] = {}
+    for item in requests:
+        status = str(item.get("status") or "unknown")
+        action = str(item.get("action") or "unknown")
+        risk = str(item.get("risk") or "unknown")
+        by_status[status] = by_status.get(status, 0) + 1
+        by_action[action] = by_action.get(action, 0) + 1
+        by_risk[risk] = by_risk.get(risk, 0) + 1
+    return {
+        "root": str(root),
+        "total": len(requests),
+        "by_status": by_status,
+        "by_action": by_action,
+        "by_risk": by_risk,
+        "latest_requests": requests[:20],
+    }
+
+
 @router.get("/snapshot")
 async def snapshot():
     ledger = _json(_wrapper_root() / "runtime" / "planner_hypothesis_ledger.json")
@@ -78,6 +134,7 @@ async def snapshot():
     branch_lifecycle = _json(_wrapper_root() / "runtime" / "branch_lifecycle.json")
     native_tool_lifecycle = _json(_wrapper_root() / "runtime" / "native_tool_lifecycle.json")
     expansion_readiness = _json(_wrapper_root() / "runtime" / "expansion_readiness.json")
+    machine_ops = _machine_ops()
     return {
         "operator": {
             "paused": (_wrapper_root() / ".pause_operator").exists(),
@@ -103,4 +160,5 @@ async def snapshot():
         "branch_lifecycle": branch_lifecycle,
         "native_tool_lifecycle": native_tool_lifecycle,
         "expansion_readiness": expansion_readiness,
+        "machine_ops": machine_ops,
     }

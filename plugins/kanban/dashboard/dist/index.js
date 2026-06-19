@@ -590,11 +590,9 @@
         if (wsClosedRef.current) return;
         // Build the WS URL via the host SDK so the correct auth param is used
         // in BOTH modes: single-use ?ticket= in gated OAuth mode, ?token= in
-        // loopback. Reading window.__HERMES_SESSION_TOKEN__ directly (the old
-        // path) sends an empty token and is rejected in gated mode. buildWsUrl
-        // also applies the dashboard base-path prefix for reverse-proxied
-        // deployments, which the old inline URL did not. It's async (gated
-        // mode mints a fresh ticket per connect), so resolve then open.
+        // loopback. The helper also applies the dashboard base-path prefix for
+        // reverse-proxied deployments. It's async (gated mode mints a fresh
+        // ticket per connect), so resolve then open.
         const wsParams = { since: String(cursorRef.current || 0) };
         // Pin the WS stream to the currently-selected board so events
         // from other boards don't bleed in. Includes "default" so the
@@ -602,17 +600,8 @@
         // ``current`` file — same rationale as ``withBoard()`` above.
         // Regression: #20879.
         if (board) wsParams.board = board;
-        const buildKanbanWsUrl = SDK.buildWsUrl
-          ? SDK.buildWsUrl.bind(SDK)
-          : function (path, params) {
-              const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-              const base = (window.__HERMES_BASE_PATH__ || "").replace(/\/$/, "");
-              const query = new URLSearchParams(params || {});
-              const token = window.__HERMES_SESSION_TOKEN__ || "";
-              if (token && !query.has("token")) query.set("token", token);
-              return Promise.resolve(`${proto}//${window.location.host}${base}${path}?${query.toString()}`);
-            };
-        buildKanbanWsUrl(`${API}/events`, wsParams).then(function (url) {
+        if (!SDK.buildWsUrl) return;
+        SDK.buildWsUrl(`${API}/events`, wsParams).then(function (url) {
           if (wsClosedRef.current) return;
           let ws;
           try { ws = new WebSocket(url); } catch (_e) { return; }
