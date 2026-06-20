@@ -134,6 +134,10 @@ async def snapshot():
     branch_lifecycle = _json(_wrapper_root() / "runtime" / "branch_lifecycle.json")
     native_tool_lifecycle = _json(_wrapper_root() / "runtime" / "native_tool_lifecycle.json")
     expansion_readiness = _json(_wrapper_root() / "runtime" / "expansion_readiness.json")
+    operator_council = _json(_wrapper_root() / "runtime" / "operator_council.json")
+    online_research_policy = _json(_wrapper_root() / "runtime" / "online_research_policy.json")
+    agent_skill_ratings = _json(_wrapper_root() / "runtime" / "agent_skill_ratings.json")
+    operator_intelligence = _json(_wrapper_root() / "runtime" / "operator_intelligence.json")
     machine_ops = _machine_ops()
     return {
         "operator": {
@@ -160,5 +164,9 @@ async def snapshot():
         "branch_lifecycle": branch_lifecycle,
         "native_tool_lifecycle": native_tool_lifecycle,
         "expansion_readiness": expansion_readiness,
+        "operator_council": operator_council,
+        "online_research_policy": online_research_policy,
+        "agent_skill_ratings": agent_skill_ratings,
+        "operator_intelligence": operator_intelligence,
         "machine_ops": machine_ops,
     }
