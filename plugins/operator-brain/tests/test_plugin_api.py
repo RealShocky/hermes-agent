@@ -26,6 +26,10 @@ def test_snapshot_exposes_proving_ground(tmp_path, monkeypatch) -> None:
     (runtime / "branch_lifecycle.json").write_text('{"pruned_branches":[{"branch":"auto/demo"}]}', encoding="utf-8")
     (runtime / "native_tool_lifecycle.json").write_text('{"gate":"overwatch_proving_ground"}', encoding="utf-8")
     (runtime / "expansion_readiness.json").write_text('{"ready_for_more_repos":false}', encoding="utf-8")
+    (runtime / "operator_council.json").write_text('{"consensus":"proceed_with_overwatch"}', encoding="utf-8")
+    (runtime / "online_research_policy.json").write_text('{"default":"offline_first"}', encoding="utf-8")
+    (runtime / "agent_skill_ratings.json").write_text('{"ratings":{"overall_system":{"score":7.1}}}', encoding="utf-8")
+    (runtime / "operator_intelligence.json").write_text('{"timestamp":"now"}', encoding="utf-8")
     machine_ops = tmp_path / "machine-ops" / "pending"
     machine_ops.mkdir(parents=True)
     (machine_ops / "request.json").write_text(
@@ -43,6 +47,10 @@ def test_snapshot_exposes_proving_ground(tmp_path, monkeypatch) -> None:
     assert payload["branch_lifecycle"]["pruned_branches"][0]["branch"] == "auto/demo"
     assert payload["native_tool_lifecycle"]["gate"] == "overwatch_proving_ground"
     assert payload["expansion_readiness"]["ready_for_more_repos"] is False
+    assert payload["operator_council"]["consensus"] == "proceed_with_overwatch"
+    assert payload["online_research_policy"]["default"] == "offline_first"
+    assert payload["agent_skill_ratings"]["ratings"]["overall_system"]["score"] == 7.1
+    assert payload["operator_intelligence"]["timestamp"] == "now"
     assert payload["machine_ops"]["total"] == 1
     assert payload["machine_ops"]["by_action"]["qwen.restart"] == 1
     assert payload["machine_ops"]["latest_requests"][0]["reason"] == "test"

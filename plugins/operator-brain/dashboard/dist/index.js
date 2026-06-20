@@ -30,6 +30,13 @@
     const cleanup = data.workspace_cleanup || {};
     const lifecycle = data.branch_lifecycle || {};
     const machineOps = data.machine_ops || {};
+    const council = data.operator_council || {};
+    const researchPolicy = data.online_research_policy || {};
+    const skillRatings = ((data.agent_skill_ratings || {}).ratings) || {};
+    const ratingItems = Object.keys(skillRatings).map(function (key) {
+      const item = skillRatings[key] || {};
+      return { key: key, score: item.score, title: item.title, evidence: item.evidence };
+    });
     return h("div", { className: "ob-page" },
       h("header", { className: "ob-header" },
         h("div", null, h("h1", null, "Operator Brain"), h("p", null, "The autonomous engineering world, live.")),
@@ -42,7 +49,29 @@
           h("div", null, "PR: " + String((item.latest_pull_request || {}).status || "none") +
             " / merge: " + String((item.latest_merge || {}).status || "none") +
             " / validation: " + String((item.latest_validation || {}).status || "unknown")),
+          item.failure_improvement_contract ? h("div", null,
+            "Improvement contracts: " + String(item.failure_improvement_contract.pending_count || 0) + " pending") : null,
           h(Badge, null, item.model_blocked ? "Blocked: model offline" : (item.ready_for_more_repos ? "Ready for more repos" : "Benchmark running"))));
+      }),
+      section("Operator Council", council.roles || [], function (item, index) {
+        return h(Card, { key: item.role || index }, h(CardContent, null,
+          h("strong", null, item.role || "Council role"),
+          h("div", null, item.focus || ""),
+          h(Badge, null, item.vote || "unknown")));
+      }),
+      section("Skill Ratings", ratingItems, function (item) {
+        return h(Card, { key: item.key }, h(CardContent, null,
+          h("strong", null, item.key.replace(/_/g, " ")),
+          h("div", null, "score: " + String(item.score || "?") + " / 10"),
+          item.evidence ? h("div", null, item.evidence) : null,
+          h(Badge, null, item.title || "unknown")));
+      }),
+      section("Online Research Policy", [researchPolicy], function (item) {
+        return h(Card, { key: "online-research-policy" }, h(CardContent, null,
+          h("strong", null, "Default: " + String(item.default || "unknown")),
+          h("div", null, String(item.planner_rule || "")),
+          h("div", null, "Allowed: " + String((item.allowed_without_human_approval || []).length) + " categories"),
+          h(Badge, null, item.status || "unknown")));
       }),
       section("Workspace Cleanup", cleanup.results || lifecycle.sync_results || [], function (item, index) {
         const classification = item.classification || item;
@@ -80,6 +109,8 @@
           h("div", null, stageText),
           item.failure_type ? h("div", null, "Failure: " + item.failure_type) : null,
           item.retry_reason ? h("div", null, "Retry reason: " + item.retry_reason) : null,
+          item.improvement_contract && item.improvement_contract.required ?
+            h("div", null, "Improvement required: " + String(item.improvement_contract.status || "pending")) : null,
           h(Badge, null, item.status || "incomplete")));
       }),
       section("Agents", data.agents, function (item) {
