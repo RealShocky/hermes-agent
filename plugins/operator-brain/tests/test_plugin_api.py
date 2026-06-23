@@ -30,6 +30,8 @@ def test_snapshot_exposes_proving_ground(tmp_path, monkeypatch) -> None:
     (runtime / "online_research_policy.json").write_text('{"default":"offline_first"}', encoding="utf-8")
     (runtime / "agent_skill_ratings.json").write_text('{"ratings":{"overall_system":{"score":7.1}}}', encoding="utf-8")
     (runtime / "operator_intelligence.json").write_text('{"timestamp":"now"}', encoding="utf-8")
+    (runtime / "coder_performance.json").write_text('{"quality":{"coding_round_pass_ratio":0.63}}', encoding="utf-8")
+    (runtime / "failure_recipes.json").write_text('{"total_failure_types":2}', encoding="utf-8")
     machine_ops = tmp_path / "machine-ops" / "pending"
     machine_ops.mkdir(parents=True)
     (machine_ops / "request.json").write_text(
@@ -51,6 +53,8 @@ def test_snapshot_exposes_proving_ground(tmp_path, monkeypatch) -> None:
     assert payload["online_research_policy"]["default"] == "offline_first"
     assert payload["agent_skill_ratings"]["ratings"]["overall_system"]["score"] == 7.1
     assert payload["operator_intelligence"]["timestamp"] == "now"
+    assert payload["coder_performance"]["quality"]["coding_round_pass_ratio"] == 0.63
+    assert payload["failure_recipes"]["total_failure_types"] == 2
     assert payload["machine_ops"]["total"] == 1
     assert payload["machine_ops"]["by_action"]["qwen.restart"] == 1
     assert payload["machine_ops"]["latest_requests"][0]["reason"] == "test"

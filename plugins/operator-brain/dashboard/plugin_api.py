@@ -138,6 +138,8 @@ async def snapshot():
     online_research_policy = _json(_wrapper_root() / "runtime" / "online_research_policy.json")
     agent_skill_ratings = _json(_wrapper_root() / "runtime" / "agent_skill_ratings.json")
     operator_intelligence = _json(_wrapper_root() / "runtime" / "operator_intelligence.json")
+    coder_performance = _json(_wrapper_root() / "runtime" / "coder_performance.json")
+    failure_recipes = _json(_wrapper_root() / "runtime" / "failure_recipes.json")
     machine_ops = _machine_ops()
     return {
         "operator": {
@@ -168,5 +170,7 @@ async def snapshot():
         "online_research_policy": online_research_policy,
         "agent_skill_ratings": agent_skill_ratings,
         "operator_intelligence": operator_intelligence,
+        "coder_performance": coder_performance,
+        "failure_recipes": failure_recipes,
         "machine_ops": machine_ops,
     }
