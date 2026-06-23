@@ -32,6 +32,8 @@
     const machineOps = data.machine_ops || {};
     const council = data.operator_council || {};
     const researchPolicy = data.online_research_policy || {};
+    const coderPerformance = data.coder_performance || ((data.operator_intelligence || {}).coder_performance) || {};
+    const failureRecipes = data.failure_recipes || ((data.operator_intelligence || {}).failure_recipes) || {};
     const skillRatings = ((data.agent_skill_ratings || {}).ratings) || {};
     const ratingItems = Object.keys(skillRatings).map(function (key) {
       const item = skillRatings[key] || {};
@@ -65,6 +67,31 @@
           h("div", null, "score: " + String(item.score || "?") + " / 10"),
           item.evidence ? h("div", null, item.evidence) : null,
           h(Badge, null, item.title || "unknown")));
+      }),
+      section("Coder Performance", [coderPerformance], function (item) {
+        const quality = item.quality || {};
+        const delivered = item.delivered_task_to_pr_minutes || {};
+        const raw = item.task_to_pr_minutes || {};
+        const throughput = item.delivered_throughput || item.throughput || {};
+        const failures = quality.failure_counts || {};
+        return h(Card, { key: "coder-performance" }, h(CardContent, null,
+          h("strong", null, "Overwatch coder speed"),
+          h("div", null, "delivered median task-to-PR: " + String(delivered.median || 0) + " minutes"),
+          h("div", null, "raw median task-to-PR: " + String(raw.median || 0) + " minutes"),
+          h("div", null, "coding pass ratio: " + String(quality.coding_round_pass_ratio || 0)),
+          h("div", null, "delivery ratio: " + String(quality.delivery_success_ratio || 0)),
+          h("div", null, "failures: " + JSON.stringify(failures)),
+          h("div", null, "throughput: " + String(throughput.status || "unknown") +
+            (throughput.files_per_hour ? " / " + String(throughput.files_per_hour) + " files/hour" : "")),
+          h(Badge, null, item.workspace || "unknown")));
+      }),
+      section("Failure Recipes", failureRecipes.recipes || [], function (item, index) {
+        return h(Card, { key: item.failure_type || index }, h(CardContent, null,
+          h("strong", null, item.failure_type || "failure"),
+          h("div", null, "count: " + String(item.count || 0)),
+          h("div", null, item.recipe || ""),
+          item.retry_policy ? h("div", null, "retry: " + item.retry_policy) : null,
+          h(Badge, null, "recipe")));
       }),
       section("Online Research Policy", [researchPolicy], function (item) {
         return h(Card, { key: "online-research-policy" }, h(CardContent, null,
