@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 
 router = APIRouter()
 
@@ -121,7 +121,10 @@ def _machine_ops() -> dict[str, Any]:
 
 
 @router.get("/snapshot")
-async def snapshot():
+async def snapshot(response: Response):
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     ledger = _json(_wrapper_root() / "runtime" / "planner_hypothesis_ledger.json")
     planner = _latest("*_planner_round.json", 1)
     coding = _latest("*_coding_round.json", 8)
@@ -142,6 +145,7 @@ async def snapshot():
     failure_recipes = _json(_wrapper_root() / "runtime" / "failure_recipes.json")
     machine_ops = _machine_ops()
     return {
+        "snapshot_timestamp": proving_ground.get("timestamp") or operator_intelligence.get("timestamp"),
         "operator": {
             "paused": (_wrapper_root() / ".pause_operator").exists(),
             "root": str(_wrapper_root()),

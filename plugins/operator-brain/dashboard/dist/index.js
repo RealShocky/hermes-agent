@@ -16,15 +16,17 @@
     const [data, setData] = useState(null);
     const [error, setError] = useState("");
     function load() {
-      SDK.fetchJSON("/api/plugins/operator-brain/snapshot")
-        .then(setData).catch(function (err) { setError(String(err)); });
+      SDK.fetchJSON("/api/plugins/operator-brain/snapshot?ts=" + String(Date.now()))
+        .then(function (snapshot) {
+          setError("");
+          setData(Object.assign({}, snapshot, { loaded_at: new Date().toISOString() }));
+        }).catch(function (err) { setError(String(err)); });
     }
     useEffect(function () {
       load();
       const timer = setInterval(load, 10000);
       return function () { clearInterval(timer); };
     }, []);
-    if (error) return h("div", { className: "ob-error" }, error);
     if (!data) return h("div", null, "Loading Operator Brain...");
     const proving = data.proving_ground || {};
     const cleanup = data.workspace_cleanup || {};
@@ -44,6 +46,10 @@
         h("div", null, h("h1", null, "Operator Brain"), h("p", null, "The autonomous engineering world, live.")),
         h(Button, { onClick: load, size: "sm" }, "Refresh"),
         h(Badge, null, data.operator.paused ? "Paused" : "Running")),
+      error ? h("div", { className: "ob-error" }, "Refresh failed: " + error) : null,
+      h("div", { className: "ob-muted" },
+        "Snapshot: " + String(data.snapshot_timestamp || (data.proving_ground || {}).timestamp || "unknown") +
+        " / loaded: " + String(data.loaded_at || "unknown")),
       section("Overwatch Proving Ground", [proving], function (item) {
         return h(Card, { key: "overwatch-proving-ground" }, h(CardContent, null,
           h("strong", null, "Phase " + String(item.current_phase || "?") + " / " + String(item.pending_total || 0) + " tasks pending"),
