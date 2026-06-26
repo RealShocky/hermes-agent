@@ -1,6 +1,8 @@
 import importlib.util
 from pathlib import Path
 
+from fastapi import Response
+
 
 MODULE = Path(__file__).resolve().parents[1] / "dashboard" / "plugin_api.py"
 SPEC = importlib.util.spec_from_file_location("operator_brain_api", MODULE)
@@ -42,8 +44,11 @@ def test_snapshot_exposes_proving_ground(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("HERMES_MACHINE_OPS_ROOT", str(tmp_path / "machine-ops"))
 
     import asyncio
-    payload = asyncio.run(plugin_api.snapshot())
+    response = Response()
+    payload = asyncio.run(plugin_api.snapshot(response))
 
+    assert response.headers["Cache-Control"] == "no-store, max-age=0"
+    assert payload["snapshot_timestamp"] == "now"
     assert payload["proving_ground"]["current_phase"] == 1
     assert payload["workspace_cleanup"]["results"][0]["workspace"] == "DEMO"
     assert payload["branch_lifecycle"]["pruned_branches"][0]["branch"] == "auto/demo"
