@@ -396,6 +396,8 @@ class TestRunBrowserCommandPathConstruction:
                 return True  # _SANE_PATH dirs
             return real_isdir(p)
 
+        hermes_home = str(tmp_path / "hermes-home")
+
         with patch("tools.browser_tool._find_agent_browser", return_value="/usr/local/bin/agent-browser"), \
  patch("tools.browser_tool._chromium_installed", return_value=True), \
              patch("tools.browser_tool._get_session_info", return_value=fake_session), \
@@ -406,7 +408,11 @@ class TestRunBrowserCommandPathConstruction:
              patch("os.open", return_value=99), \
              patch("os.close"), \
              patch("tools.interrupt.is_interrupted", return_value=False), \
-             patch.dict(os.environ, {"PATH": "/usr/bin:/bin", "HOME": "/home/test"}, clear=True):
+             patch.dict(
+                 os.environ,
+                 {"PATH": "/usr/bin:/bin", "HOME": "/home/test", "HERMES_HOME": hermes_home},
+                 clear=True,
+             ):
             # The function reads from temp files for stdout/stderr
             with patch("builtins.open", mock_open(read_data=fake_json)):
                 _run_browser_command("test-task", "navigate", ["https://example.com"])
@@ -445,6 +451,8 @@ class TestRunBrowserCommandPathConstruction:
                 return True
             return real_isdir(p)
 
+        hermes_home = str(tmp_path / "hermes-home")
+
         with patch("tools.browser_tool._find_agent_browser", return_value="/usr/local/bin/agent-browser"), \
  patch("tools.browser_tool._chromium_installed", return_value=True), \
              patch("tools.browser_tool._get_session_info", return_value=fake_session), \
@@ -455,7 +463,11 @@ class TestRunBrowserCommandPathConstruction:
              patch("os.open", return_value=99), \
              patch("os.close"), \
              patch("tools.interrupt.is_interrupted", return_value=False), \
-             patch.dict(os.environ, {"PATH": "/usr/bin:/bin", "HOME": "/home/test"}, clear=True):
+             patch.dict(
+                 os.environ,
+                 {"PATH": "/usr/bin:/bin", "HOME": "/home/test", "HERMES_HOME": hermes_home},
+                 clear=True,
+             ):
             with patch("builtins.open", mock_open(read_data=fake_json)):
                 _run_browser_command("test-task", "navigate", ["https://example.com"])
 
@@ -494,6 +506,8 @@ class TestRunBrowserCommandPathConstruction:
                 return True
             return real_isdir(path)
 
+        hermes_home = str(tmp_path / "hermes-home")
+
         with patch("tools.browser_tool._find_agent_browser", return_value="/usr/local/bin/agent-browser"), \
  patch("tools.browser_tool._chromium_installed", return_value=True), \
              patch("tools.browser_tool._get_session_info", return_value=fake_session), \
@@ -504,7 +518,11 @@ class TestRunBrowserCommandPathConstruction:
              patch("os.open", return_value=99), \
              patch("os.close"), \
              patch("tools.interrupt.is_interrupted", return_value=False), \
-             patch.dict(os.environ, {"PATH": "/usr/bin:/bin", "HOME": "/home/test"}, clear=True):
+             patch.dict(
+                 os.environ,
+                 {"PATH": "/usr/bin:/bin", "HOME": "/home/test", "HERMES_HOME": hermes_home},
+                 clear=True,
+             ):
             with patch("builtins.open", mock_open(read_data=fake_json)):
                 _run_browser_command("test-task", "navigate", ["https://example.com"])
 
