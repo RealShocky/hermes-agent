@@ -486,6 +486,20 @@ class TestSanitizeEnvLines:
         result = _sanitize_env_lines(lines)
         assert result == lines
 
+    def test_value_embedding_known_key_not_split(self):
+        """A value embedding a known KEY= substring must stay one secret."""
+        lines = [
+            "OPENAI_BASE_URL=https://proxy.example.com/v1?TAVILY_API_KEY=sk-embedded\n",
+        ]
+        result = _sanitize_env_lines(lines)
+        assert result == lines, f"embedded key in value corrupted the secret: {result}"
+
+    def test_leading_text_before_first_key_not_dropped(self):
+        """Leading text before the first known key must not be silently dropped."""
+        lines = ["export OPENAI_API_KEY=sk1ANTHROPIC_API_KEY=sk2\n"]
+        result = _sanitize_env_lines(lines)
+        assert result == lines, f"leading text was dropped: {result}"
+
     def test_unknown_keys_not_split(self):
         """Unknown key names on one line are NOT split (avoids false positives)."""
         lines = ["CUSTOM_VAR=value123OTHER_THING=value456\n"]
