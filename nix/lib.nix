@@ -20,8 +20,16 @@ let
   src = ../.;
 
   # Single npm deps fetch from the workspace root lockfile.
-  # All workspace packages share this derivation.
-  npmDepsHash = "sha256-3kHn3DXML0HaY6tEsUM6u3LZwIj5nJY5oVRNxwC//Us=";
+  # All workspace packages share this derivation, but npm optional
+  # platform packages make fetchNpmDeps produce platform-specific hashes.
+  npmDepsHashes = {
+    "x86_64-linux" = "sha256-s/Dc4YW/fk1GSxvbOOB+aVFyXQgrIzlT0w78GrTn7ow=";
+    "aarch64-linux" = "sha256-s/Dc4YW/fk1GSxvbOOB+aVFyXQgrIzlT0w78GrTn7ow=";
+    "aarch64-darwin" = "sha256-pwuAfpPIjLXGFOi5cyj8CgfR+r6WF0CRtmOk7f8lw9A=";
+  };
+  npmDepsHash =
+    npmDepsHashes.${pkgs.stdenv.hostPlatform.system}
+      or (throw "Unsupported npmDepsHash platform: ${pkgs.stdenv.hostPlatform.system}");
 
   npmDeps = pkgs.fetchNpmDeps {
     inherit src;
@@ -159,7 +167,7 @@ in
       fi
     '';
 
-  # Build `fix-lockfiles` bin that checks/updates the single npmDepsHash
+  # Build `fix-lockfiles` bin that checks/updates this platform's npmDepsHash
   #   fix-lockfiles --check   # exit 1 if any hash is stale
   #   fix-lockfiles --apply   # rewrite stale hashes in place
   #   fix-lockfiles           # alias of --apply
@@ -224,8 +232,19 @@ in
         fi
       fi
 
-      OLD_HASH=$(grep -oE 'npmDepsHash = "sha256-[^"]+"' "$LIB_FILE" | head -1 \
-        | sed -E 's/npmDepsHash = "(.*)"/\1/')
+      SYSTEM="${pkgs.stdenv.hostPlatform.system}"
+      OLD_HASH=$(awk -v system="$SYSTEM" '
+        $0 ~ "\"" system "\"" "[[:space:]]*=[[:space:]]*\"sha256-" {
+          sub(/^.*= "/, "")
+          sub(/";.*$/, "")
+          print
+          exit
+        }
+      ' "$LIB_FILE")
+      if [ -z "$OLD_HASH" ]; then
+        echo "::error::No npmDepsHash entry found for $SYSTEM in $LIB_FILE" >&2
+        exit 1
+      fi
 
       # prefetch-npm-deps says the hash already matches — but it only hashes the
       # lockfile *contents* and can disagree with fetchNpmDeps + npmConfigHook,
@@ -281,7 +300,7 @@ in
         exit 0
       fi
 
-      HASH_LINE=$(grep -n 'npmDepsHash = "sha256-' "$LIB_FILE" | head -1 | cut -d: -f1)
+      HASH_LINE=$(grep -nE "\"$SYSTEM\"[[:space:]]*=[[:space:]]*\"sha256-" "$LIB_FILE" | head -1 | cut -d: -f1)
       echo "stale: $LIB_FILE:$HASH_LINE $OLD_HASH -> $NEW_HASH"
       STALE=1
 
@@ -294,7 +313,7 @@ in
       fi
 
       if [ "$MODE" = "--apply" ]; then
-        sed -i -E "s|npmDepsHash = \"sha256-[^\"]+\";|npmDepsHash = \"$NEW_HASH\";|" "$LIB_FILE"
+        sed -i -E "s|(\"$SYSTEM\"[[:space:]]*=[[:space:]]*\")sha256-[^\"]+(\";)|\1$NEW_HASH\2|" "$LIB_FILE"
         if ! nix build ".#${attr}.npmDeps" --no-link --print-build-logs 2>/dev/null; then
           # prefetch-npm-deps may disagree with fetchNpmDeps (it hashes
           # the lockfile contents, not the full source tree).  Extract the
@@ -303,7 +322,7 @@ in
           CORRECT_HASH=$(echo "$RETRY_OUTPUT" | awk '/got:/ {print $2; exit}')
           if [ -n "$CORRECT_HASH" ]; then
             echo "prefetch-npm-deps gave $NEW_HASH but nix wants $CORRECT_HASH — retrying" >&2
-            sed -i -E "s|npmDepsHash = \"sha256-[^\"]+\";|npmDepsHash = \"$CORRECT_HASH\";|" "$LIB_FILE"
+            sed -i -E "s|(\"$SYSTEM\"[[:space:]]*=[[:space:]]*\")sha256-[^\"]+(\";)|\1$CORRECT_HASH\2|" "$LIB_FILE"
             if ! nix build ".#${attr}.npmDeps" --no-link --print-build-logs; then
               echo "verification build failed after hash retry" >&2
               exit 1
