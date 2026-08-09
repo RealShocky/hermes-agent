@@ -3367,6 +3367,30 @@ class HermesCLI(CLIAgentSetupMixin, CLICommandsMixin):
             os.getenv("HERMES_EPHEMERAL_SYSTEM_PROMPT", "")
             or CLI_CONFIG["agent"].get("system_prompt", "")
         )
+        if not self.ignore_rules and os.environ.get("HERMES_PRIME_CONTEXT", "1") != "0":
+            try:
+                from hermes_cli.operator_brain import build_chat_context, find_prime_root
+                _prime_root = find_prime_root(Path(os.getcwd()))
+                if _prime_root is not None:
+                    _cwd = Path(os.getcwd()).resolve()
+                    _root = _prime_root.resolve()
+                    if _cwd == _root or _root in _cwd.parents:
+                        _brain_context = (
+                            "Live Hermes Prime Operator Brain context. "
+                            "Use this when the user asks what Hermes, the agents, "
+                            "Operator Brain, Kanban, Overwatch, or the system are doing now.\n\n"
+                            "When the user approves autonomous implementation for an already-registered workspace, "
+                            "queue the work with `hermes operator task create --workspace NAME --summary \"Task\" "
+                            "--type feature|fix|self-improve|infra|tool`. Use `--dispatch` only when the user wants "
+                            "an immediate side-lane scheduler pass. For brand-new workspaces, explain that audited "
+                            "workspace creation is the next bridge layer and do not invent registry edits silently.\n\n"
+                            f"{build_chat_context()}"
+                        )
+                        self.system_prompt = "\n\n".join(
+                            part for part in (self.system_prompt, _brain_context) if part
+                        )
+            except Exception:
+                pass
         self.personalities = CLI_CONFIG["agent"].get("personalities", {})
         
         # Ephemeral prefill messages (few-shot priming, never persisted)
@@ -7558,6 +7582,8 @@ class HermesCLI(CLIAgentSetupMixin, CLICommandsMixin):
             self._handle_stop_command()
         elif canonical == "agents":
             self._handle_agents_command()
+        elif canonical == "operator":
+            self._handle_operator_command(cmd_original)
         elif canonical == "background":
             self._handle_background_command(cmd_original)
         elif canonical == "queue":

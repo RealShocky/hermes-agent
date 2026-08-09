@@ -25,4 +25,14 @@ def build_status_parser(subparsers, *, cmd_status: Callable) -> None:
     status_parser.add_argument(
         "--deep", action="store_true", help="Run deep checks (may take longer)"
     )
+    status_parser.add_argument(
+        "--brain",
+        action="store_true",
+        help="Show live Hermes Prime Operator Brain state from hermes-wrapper/runtime",
+    )
+    status_parser.add_argument(
+        "--brain-only",
+        action="store_true",
+        help="Show only live Hermes Prime Operator Brain state",
+    )
     status_parser.set_defaults(func=cmd_status)

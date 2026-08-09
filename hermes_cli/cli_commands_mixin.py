@@ -263,6 +263,63 @@ class CLICommandsMixin:
 
         agent_running = getattr(self, "_agent_running", False)
         _cprint(f"  Agent: {'running' if agent_running else 'idle'}")
+        try:
+            from hermes_cli.operator_brain import format_operator_brain_summary
+            _cprint("")
+            for line in format_operator_brain_summary().splitlines():
+                _cprint(f"  {line}")
+        except Exception as exc:
+            _cprint(f"  Operator Brain: unavailable ({exc})")
+
+    def _handle_operator_command(self, cmd_original: str) -> None:
+        """Handle /operator status|pause|resume|refresh."""
+        from argparse import Namespace
+        import shlex
+
+        from cli import _cprint
+        from hermes_cli.operator_brain import operator_command
+
+        try:
+            parts = shlex.split(cmd_original)
+        except ValueError as exc:
+            _cprint(f"  Invalid /operator command: {exc}")
+            return
+        action = parts[1].lower() if len(parts) > 1 else "status"
+        if action == "task" and len(parts) > 2:
+            task_action = parts[2].lower()
+            if task_action == "create":
+                values = {"operator_action": "task", "operator_task_action": "create", "task_type": "feature", "reason": None, "refresh": True, "dispatch": False}
+                index = 3
+                while index < len(parts):
+                    token = parts[index]
+                    if token == "--dispatch":
+                        values["dispatch"] = True
+                        index += 1
+                        continue
+                    if token == "--no-refresh":
+                        values["refresh"] = False
+                        index += 1
+                        continue
+                    if token in {"--workspace", "--summary", "--reason", "--type"} and index + 1 < len(parts):
+                        key = "task_type" if token == "--type" else token.lstrip("-").replace("-", "_")
+                        values[key] = parts[index + 1]
+                        index += 2
+                        continue
+                    _cprint("  Usage: /operator task create --workspace NAME --summary \"Task\" [--type feature|fix|self-improve|infra|tool] [--dispatch]")
+                    return
+                if not values.get("workspace") or not values.get("summary"):
+                    _cprint("  Usage: /operator task create --workspace NAME --summary \"Task\"")
+                    return
+                operator_command(Namespace(**values))
+                return
+            if task_action == "list":
+                operator_command(Namespace(operator_action="task", operator_task_action="list", limit=10, reason=None))
+                return
+        reason = " ".join(parts[2:]).strip() if action == "pause" and len(parts) > 2 else None
+        if action not in {"status", "pause", "resume", "refresh", "approvals"}:
+            _cprint("  Usage: /operator [status|pause [reason]|resume|refresh|approvals|task]")
+            return
+        operator_command(Namespace(operator_action=action, reason=reason, limit=25))
 
     def _handle_paste_command(self):
         """Handle /paste — explicitly check clipboard for an image.
