@@ -5,6 +5,7 @@ Mark an item from `[ ]` to `[x]` in the same PR when the task is complete.
 
 ## Ready
 
+- [ ] Scout and selectively import the highest-value upstream dependency/security and Windows process robustness fixes from NousResearch/hermes-agent using docs/phase/CORE_UPSTREAM_SELECTIVE_IMPORT_PLAN_2026-08-09.md; do not bulk merge upstream/main
 - [ ] Harden delegated subagent execution: eliminate fake tool-call / placeholder output on native child delegate_task path (ROADMAP #5)
 - [x] Reduce PAT reliance: remove GITHUB_TOKEN fallback from autonomy_token_from_env, reserve PAT for admin/emergency only (ROADMAP #6)
 - [ ] Expand recipe-backed structured tasks beyond validation/deploy/dependency fixes for cleaner autonomous completion
@@ -19,4 +20,3 @@ Mark an item from `[ ]` to `[x]` in the same PR when the task is complete.
 ## Deferred
 
 - [ ] Resume ACP/editor attachment verification when VS Code/Cursor work is back in scope
-

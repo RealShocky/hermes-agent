@@ -27,6 +27,7 @@ from hermes_cli.subcommands.login import build_login_parser
 from hermes_cli.subcommands.logout import build_logout_parser
 from hermes_cli.subcommands.logs import build_logs_parser
 from hermes_cli.subcommands.model import build_model_parser
+from hermes_cli.subcommands.operator import build_operator_parser
 from hermes_cli.subcommands.postinstall import build_postinstall_parser
 from hermes_cli.subcommands.prompt_size import build_prompt_size_parser
 from hermes_cli.subcommands.security import build_security_parser
@@ -58,6 +59,7 @@ SINGLE_HANDLER_CASES = [
     ("logout", build_logout_parser, "cmd_logout", ["logout"]),
     ("auth", build_auth_parser, "cmd_auth", ["auth"]),
     ("status", build_status_parser, "cmd_status", ["status"]),
+    ("operator", build_operator_parser, "cmd_operator", ["operator", "status"]),
     ("webhook", build_webhook_parser, "cmd_webhook", ["webhook"]),
     ("hooks", build_hooks_parser, "cmd_hooks", ["hooks"]),
     ("doctor", build_doctor_parser, "cmd_doctor", ["doctor"]),
@@ -95,3 +97,46 @@ def test_dashboard_builder_two_handlers():
     assert parser.parse_args(["dashboard"]).func is dash
     # dashboard register -> register handler
     assert parser.parse_args(["dashboard", "register"]).func is reg
+
+
+def test_operator_task_create_parser():
+    parser = argparse.ArgumentParser(prog="hermes")
+    sub = parser.add_subparsers(dest="command")
+    handler = _h("operator")
+    build_operator_parser(sub, cmd_operator=handler)
+
+    ns = parser.parse_args(
+        [
+            "operator",
+            "task",
+            "create",
+            "--workspace",
+            "HERMES_WRAPPER",
+            "--summary",
+            "Improve self-analysis",
+            "--type",
+            "self-improve",
+            "--dispatch",
+        ]
+    )
+
+    assert ns.func is handler
+    assert ns.operator_action == "task"
+    assert ns.operator_task_action == "create"
+    assert ns.workspace == "HERMES_WRAPPER"
+    assert ns.summary == "Improve self-analysis"
+    assert ns.task_type == "self-improve"
+    assert ns.dispatch is True
+
+
+def test_operator_approvals_parser():
+    parser = argparse.ArgumentParser(prog="hermes")
+    sub = parser.add_subparsers(dest="command")
+    handler = _h("operator")
+    build_operator_parser(sub, cmd_operator=handler)
+
+    ns = parser.parse_args(["operator", "approvals", "--limit", "5"])
+
+    assert ns.func is handler
+    assert ns.operator_action == "approvals"
+    assert ns.limit == 5

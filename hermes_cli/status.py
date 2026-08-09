@@ -93,6 +93,13 @@ def show_status(args):
     """Show status of all Hermes Agent components."""
     show_all = getattr(args, 'all', False)
     deep = getattr(args, 'deep', False)
+    show_brain = getattr(args, 'brain', False)
+    brain_only = getattr(args, 'brain_only', False)
+
+    if brain_only:
+        from hermes_cli.operator_brain import format_operator_brain_summary
+        print(format_operator_brain_summary())
+        return
 
     print()
     print(color("┌─────────────────────────────────────────────────────────┐", Colors.CYAN))
@@ -117,6 +124,16 @@ def show_status(args):
 
     print(f"  Model:        {_configured_model_label(config)}")
     print(f"  Provider:     {_effective_provider_label()}")
+
+    if show_brain:
+        print()
+        print(color("Operator Brain", Colors.CYAN, Colors.BOLD))
+        try:
+            from hermes_cli.operator_brain import format_operator_brain_summary
+            for line in format_operator_brain_summary().splitlines()[1:]:
+                print(f"  {line.strip()}")
+        except Exception as exc:
+            print(f"  unavailable: {exc}")
 
     # =========================================================================
     # API Keys
