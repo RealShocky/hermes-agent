@@ -23,7 +23,7 @@ let
   # All workspace packages share this derivation, but npm optional
   # platform packages make fetchNpmDeps produce platform-specific hashes.
   npmDepsHashes = {
-    "x86_64-linux" = "sha256-hlIXezLN7+SYAGwUlsVHsa8FViK+UPPfEfqIfaQSFV8=";
+    "x86_64-linux" = "sha256-44O6h+KW0nKCQf9GTzV+B17Uz5beldfMQPw7dD4d6oc=";
     "aarch64-linux" = "sha256-hlIXezLN7+SYAGwUlsVHsa8FViK+UPPfEfqIfaQSFV8=";
     "aarch64-darwin" = "sha256-hlIXezLN7+SYAGwUlsVHsa8FViK+UPPfEfqIfaQSFV8=";
   };
