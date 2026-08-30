@@ -1341,7 +1341,8 @@ def _apply_delete_for_wal_reset_bug(
             "could not set configured journal_mode=delete "
             f"(got {actual or 'no result'})"
         )
-    _log_wal_reset_bug_once(db_label, kept_wal=False)
+    if not require_delete:
+        _log_wal_reset_bug_once(db_label, kept_wal=False)
     return "delete"
 
 

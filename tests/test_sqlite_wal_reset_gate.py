@@ -71,6 +71,21 @@ class TestApplyWalWalResetGate:
         assert any("instead of enabling WAL" in r.getMessage() for r in caplog.records)
         conn.close()
 
+    def test_configured_delete_is_quiet_when_vulnerable(self, tmp_path, monkeypatch, caplog):
+        monkeypatch.setattr(
+            hermes_state, "is_sqlite_wal_reset_vulnerable", lambda version_info=None: True
+        )
+        monkeypatch.setattr(hermes_state, "resolve_journal_mode", lambda: "delete")
+        conn = sqlite3.connect(str(tmp_path / "configured_delete.db"))
+        try:
+            with caplog.at_level("WARNING", logger="hermes_state"):
+                mode = apply_wal_with_fallback(conn, db_label="configured_delete.db")
+            assert mode == "delete"
+            assert conn.execute("PRAGMA journal_mode").fetchone()[0].lower() == "delete"
+            assert not any("WAL-reset" in r.getMessage() for r in caplog.records)
+        finally:
+            conn.close()
+
     def test_existing_wal_left_alone_when_vulnerable(
         self, tmp_path, monkeypatch, caplog
     ):

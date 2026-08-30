@@ -1173,7 +1173,7 @@ class TestRepairRetriesAfterUvRefresh:
         assert sentinel.read_text(encoding="utf-8") == "live"
 
 class TestDefaultLiveVenv:
-    """_default_live_venv() must cover BOTH install layouts (venv/ and .venv/).
+    """_default_live_venv() must cover supported install layouts.
 
     Historically repair hardcoded venv/, so uv-default/.venv checkouts got
     'not-applicable' on every hermes update and stayed on journal_mode=DELETE
@@ -1184,11 +1184,19 @@ class TestDefaultLiveVenv:
         root = tmp_path / "checkout"
         root.mkdir()
         (root / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+        bin_name = "Scripts" if sys.platform == "win32" else "bin"
+        python_name = "python.exe" if sys.platform == "win32" else "python"
         for d in dirs:
-            bin_dir = root / d / "bin"
+            bin_dir = root / d / bin_name
             bin_dir.mkdir(parents=True)
-            (bin_dir / "python").write_text("py", encoding="utf-8")
+            (bin_dir / python_name).write_text("py", encoding="utf-8")
         return root
+
+    def test_venv311_only_is_targeted(self, tmp_path):
+        from hermes_cli.managed_uv import _default_live_venv
+
+        root = self._checkout(tmp_path, "venv311")
+        assert _default_live_venv(root) == root / "venv311"
 
     def test_dot_venv_only_is_targeted(self, tmp_path):
         from hermes_cli.managed_uv import _default_live_venv
@@ -1286,4 +1294,3 @@ class TestVenvPythonUpdateBoundary:
         expected = Path("/opt/hermes/venv/Scripts/python.exe") \
             if sys.platform == "win32" else Path("/opt/hermes/venv/bin/python")
         assert _venv_python(Path("/opt/hermes/venv")) == expected
-

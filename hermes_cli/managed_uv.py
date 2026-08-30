@@ -43,6 +43,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _RUNTIME_DIR_NAME = ".hermes-runtime"
 _VENV_NAME = "venv"
 _ALT_VENV_NAME = ".venv"
+_PY311_VENV_NAME = "venv311"
 _REPAIR_LOCK_NAME = "runtime-repair.lock"
 
 # ---------------------------------------------------------------------------
@@ -1011,12 +1012,44 @@ def _release_repair_lock(lock: _RepairLock) -> None:
             pass
 
 
-def _windows_runtime_holders() -> tuple[bool, str]:
+def _fallback_windows_runtime_holders(live: Path) -> tuple[bool, str]:
+    """Best-effort holder scan for direct repair of nonstandard venv names."""
+    try:
+        import psutil  # type: ignore
+    except Exception as exc:
+        return True, f"cannot verify Windows venv holders: {exc}"
+
+    try:
+        prefix = str(live.resolve()).lower().rstrip("\\/") + os.sep
+    except OSError:
+        prefix = str(live).lower().rstrip("\\/") + os.sep
+    current_pid = os.getpid()
+    holders: list[tuple[int, str]] = []
+    for process in psutil.process_iter(["pid", "name", "exe", "cmdline"]):
+        try:
+            pid = int(process.info.get("pid") or 0)
+            if pid == current_pid:
+                continue
+            exe = str(process.info.get("exe") or "").lower()
+            cmdline = " ".join(str(part) for part in (process.info.get("cmdline") or [])).lower()
+        except Exception:
+            continue
+        if exe.startswith(prefix) or prefix in cmdline:
+            holders.append((pid, str(process.info.get("name") or "process")))
+    if holders:
+        pids = ", ".join(str(pid) for pid, _name in holders[:6])
+        return True, f"other Hermes processes still hold the venv (PID {pids})"
+    return False, ""
+
+
+def _windows_runtime_holders(live: Path | None = None) -> tuple[bool, str]:
     if platform.system() != "Windows":
         return False, ""
     main_module = sys.modules.get("hermes_cli.main")
     detector = getattr(main_module, "_detect_venv_python_processes", None)
     if detector is None:
+        if live is not None:
+            return _fallback_windows_runtime_holders(live)
         return True, "cannot verify Windows venv holders from this update context"
     try:
         holders = detector()
@@ -1105,6 +1138,9 @@ def _default_live_venv(root: Path) -> Path:
     primary = root / _VENV_NAME
     if _venv_python(primary).is_file():
         return primary
+    py311 = root / _PY311_VENV_NAME
+    if _venv_python(py311).is_file():
+        return py311
     fallback = root / _ALT_VENV_NAME
     if _venv_python(fallback).is_file():
         return fallback
@@ -1187,7 +1223,7 @@ def repair_vulnerable_runtime(
             sqlite_after=current.sqlite_version_string,
         )
 
-    blocked, detail = _windows_runtime_holders()
+    blocked, detail = _windows_runtime_holders(live)
     if blocked:
         print(f"  ⚠ SQLite runtime repair deferred: {detail}")
         return RuntimeRepairResult(
