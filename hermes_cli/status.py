@@ -349,12 +349,23 @@ _SECTIONS = (
 
 def show_status(args):
     """Show status of all Hermes Agent components."""
+    if getattr(args, "brain_only", False):
+        from hermes_cli.prime_operator import print_brain_status
+
+        return print_brain_status(concise=True)
+
     # Shared by section renderers: config, --deep, and the Nous login facts Auth Providers derives
     # for the later Nous Tool Gateway section.
     ctx = SimpleNamespace(deep=getattr(args, 'deep', False), config={}, nous_logged_in=False,
                           nous_inference_present=False, nous_account_info=None)
     for render in _SECTIONS:
         render(ctx)
+
+    if getattr(args, "brain", False):
+        from hermes_cli.prime_operator import print_brain_status
+
+        print()
+        print_brain_status(concise=False)
 
 
 # ---- BEGIN PLUGIN-COMPAT (revert-scheduled; see COMPAT_MANIFEST.md) ----

@@ -14,4 +14,14 @@ def build_status_parser(subparsers, *, cmd_status: Callable) -> None:
         "--all", action="store_true", help="Show all details (redacted for sharing)")
     status_parser.add_argument(
         "--deep", action="store_true", help="Run deep checks (may take longer)")
+    status_parser.add_argument(
+        "--brain",
+        action="store_true",
+        help="Include Leonor Operator Brain runtime status",
+    )
+    status_parser.add_argument(
+        "--brain-only",
+        action="store_true",
+        help="Only show Leonor Operator Brain runtime status",
+    )
     status_parser.set_defaults(func=cmd_status)
