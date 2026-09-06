@@ -360,6 +360,7 @@ from hermes_cli.subcommands.claw import build_claw_parser
 from hermes_cli.subcommands.moa import build_moa_parser
 from hermes_cli.subcommands.fallback import build_fallback_parser
 from hermes_cli.subcommands.worktree import build_worktree_parser
+from hermes_cli.subcommands.workspace import build_workspace_parser
 from hermes_cli.subcommands.browser import build_browser_parser
 from hermes_cli.subcommands.secrets import build_secrets_parser
 from hermes_cli.subcommands.egress import build_egress_parser
@@ -1778,6 +1779,7 @@ cmd_logout = _forward_command("cmd_logout", "hermes_cli.auth", "logout_command",
 cmd_auth = _forward_command("cmd_auth", "hermes_cli.auth_commands", "auth_command", doc='Manage pooled credentials.')
 cmd_status = _forward_command("cmd_status", "hermes_cli.status", "show_status", doc='Show status of all components.')
 cmd_operator = _forward_command("cmd_operator", "hermes_cli.prime_operator", "operator_dispatch", forward_return=True, doc='Read or control Leonor operator runtime state.')
+cmd_workspace = _forward_command("cmd_workspace", "hermes_cli.leonor_workspace", "workspace_dispatch", forward_return=True, doc='Inspect the Leonor caller workspace.')
 cmd_cron = _forward_command("cmd_cron", "hermes_cli.cron", "cron_command", doc='Cron job management.')
 cmd_webhook = _forward_command("cmd_webhook", "hermes_cli.webhook", "webhook_command", doc='Webhook subscription management.')
 cmd_kanban = _forward_command("cmd_kanban", "hermes_cli.kanban", "kanban_command", forward_return=True, doc='Multi-profile collaboration board.')
@@ -3197,6 +3199,7 @@ def _build_cli_parser():
     build_auth_parser(subparsers, cmd_auth=cmd_auth)
     build_status_parser(subparsers, cmd_status=cmd_status)
     build_operator_parser(subparsers, cmd_operator=cmd_operator)
+    build_workspace_parser(subparsers, cmd_workspace=cmd_workspace)
     build_pause_parser(subparsers)
     build_cron_parser(subparsers, cmd_cron=cmd_cron)
     build_sync_parser(subparsers, cmd_sync=cmd_sync)
