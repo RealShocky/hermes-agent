@@ -46,6 +46,7 @@ def build_workspace_parser(subparsers, *, cmd_workspace: Callable) -> None:
         "build",
         help="Queue a bounded local build lane request for the caller workspace",
     )
+    build_parser.add_argument("request_text", nargs="?", default="", help="User request to attach to the local build lane")
     build_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
     build_parser.add_argument("--request", default="", help="User request to attach to the local build lane")
     build_parser.add_argument(
@@ -56,5 +57,26 @@ def build_workspace_parser(subparsers, *, cmd_workspace: Callable) -> None:
         help="Do not write the global workspace audit event",
     )
     build_parser.set_defaults(func=cmd_workspace)
+
+    execute_parser = workspace_subparsers.add_parser(
+        "execute",
+        help="Execute queued bounded local build requests for the caller workspace",
+    )
+    execute_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
+    execute_parser.add_argument("--once", action="store_true", help="Process at most one queued request")
+    execute_parser.add_argument(
+        "--timeout",
+        type=int,
+        default=900,
+        help="Maximum seconds for each workspace build command",
+    )
+    execute_parser.add_argument(
+        "--no-audit",
+        dest="audit",
+        action="store_false",
+        default=True,
+        help="Do not write the global workspace audit event",
+    )
+    execute_parser.set_defaults(func=cmd_workspace)
 
     workspace_parser.set_defaults(func=cmd_workspace)
