@@ -278,6 +278,31 @@ def test_workspace_execute_treats_auth_error_text_as_failed(monkeypatch, tmp_pat
     assert payload["runs"][0]["reason"] == "agent_reported_failure"
 
 
+def test_workspace_execute_records_executor_timeout(monkeypatch, tmp_path, capsys):
+    from hermes_cli import leonor_workspace
+
+    root = tmp_path / "HermesHome"
+    workspace = tmp_path / "CustomerProject"
+    workspace.mkdir()
+    (workspace / "PRD.md").write_text("# PRD\nBuild a dashboard.\n", encoding="utf-8")
+
+    monkeypatch.setenv("LEONOR_CALLER_CWD", str(workspace))
+    monkeypatch.setenv("HERMES_HOME", str(root))
+    assert leonor_workspace.workspace_build(SimpleNamespace(json=True, audit=True, request="build PRD")) == 0
+    capsys.readouterr()
+
+    def fake_run(*args, **kwargs):
+        raise subprocess.TimeoutExpired(kwargs.get("args") or args[0], kwargs.get("timeout", 0), output="partial")
+
+    monkeypatch.setattr(leonor_workspace.subprocess, "run", fake_run)
+
+    assert leonor_workspace.workspace_execute(SimpleNamespace(json=True, audit=True, once=True, timeout=1)) == 1
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "failed"
+    assert payload["runs"][0]["reason"] == "executor_timeout"
+
+
 def test_workspace_execution_prompt_is_bounded_for_small_context_routes(tmp_path):
     from hermes_cli import leonor_workspace
 

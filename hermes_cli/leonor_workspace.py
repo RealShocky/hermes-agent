@@ -272,14 +272,36 @@ def _run_build_request(request: dict[str, Any], timeout: int) -> dict[str, Any]:
         "HERMES_MAX_TOKENS",
         _executor_setting("LEONOR_WORKSPACE_EXECUTOR_MAX_TOKENS", EXECUTION_DEFAULT_MAX_TOKENS),
     )
-    completed = subprocess.run(
-        _executor_command(prompt),
-        cwd=str(workspace),
-        env=env,
-        timeout=timeout,
-        capture_output=True,
-        text=True,
-    )
+    command = _executor_command(prompt)
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=str(workspace),
+            env=env,
+            timeout=timeout,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return {
+            **base_run,
+            "status": "failed",
+            "reason": "executor_timeout",
+            "exit_code": None,
+            "stdout_tail": str(exc.stdout or "")[-8000:],
+            "stderr_tail": str(exc.stderr or "")[-4000:],
+            "command": _executor_command("<prompt>"),
+        }
+    except OSError as exc:
+        return {
+            **base_run,
+            "status": "failed",
+            "reason": "executor_launch_error",
+            "exit_code": None,
+            "stdout_tail": "",
+            "stderr_tail": str(exc)[-4000:],
+            "command": _executor_command("<prompt>"),
+        }
     stdout = (completed.stdout or "")[-8000:]
     stderr = (completed.stderr or "")[-4000:]
     combined_output = f"{stdout}\n{stderr}".lower()
