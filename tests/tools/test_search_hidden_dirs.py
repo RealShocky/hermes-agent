@@ -13,6 +13,8 @@ Fix: _search_files (find) and _search_with_grep both now exclude hidden
 directories, matching ripgrep's default behavior.
 """
 
+import os
+import shutil
 import subprocess
 
 import pytest
@@ -52,6 +54,11 @@ def searchable_tree(tmp_path):
 
 class TestFindExcludesHiddenDirs:
     """_search_files uses find, which should exclude hidden directories."""
+
+    pytestmark = pytest.mark.skipif(
+        os.name == "nt",
+        reason="these regression tests invoke the POSIX find command; Windows uses the Python search fallback",
+    )
 
     def test_find_skips_hub_cache_files(self, searchable_tree):
         """find should not return files from .hub/ directory."""
@@ -141,7 +148,7 @@ class TestRipgrepAlreadyExcludesHidden:
     """Verify ripgrep's default behavior is to skip hidden directories."""
 
     @pytest.mark.skipif(
-        subprocess.run(["which", "rg"], capture_output=True).returncode != 0,
+        shutil.which("rg") is None,
         reason="ripgrep not installed",
     )
     def test_rg_skips_hub_by_default(self, searchable_tree):
@@ -154,7 +161,7 @@ class TestRipgrepAlreadyExcludesHidden:
         assert "catalog.json" not in result.stdout
 
     @pytest.mark.skipif(
-        subprocess.run(["which", "rg"], capture_output=True).returncode != 0,
+        shutil.which("rg") is None,
         reason="ripgrep not installed",
     )
     def test_rg_finds_visible_content(self, searchable_tree):

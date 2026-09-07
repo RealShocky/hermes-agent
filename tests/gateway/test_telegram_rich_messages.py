@@ -17,6 +17,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+pytest.importorskip("telegram", reason="install the messaging extra to run Telegram integration tests")
+
 from gateway.config import PlatformConfig
 from gateway.platforms.base import SendResult
 from gateway.stream_consumer import GatewayStreamConsumer, StreamConsumerConfig
